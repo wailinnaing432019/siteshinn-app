@@ -60,6 +60,97 @@ void main() {
     expect(find.text(AppStrings(AppLanguage.en).cycleNameLabel), findsOneWidget);
     expect(find.text('Cycle 1'), findsNothing);
   });
+
+  testWidgets('Export Excel shows both Share File and Save to Device',
+      (tester) async {
+    SharedPreferences.setMockInitialValues({});
+
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          dashboardProvider.overrideWith(_PopulatedDashboardNotifier.new),
+        ],
+        child: const MaterialApp(
+          home: Scaffold(body: SettlementScreen()),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Export Excel'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Share File'), findsOneWidget);
+    expect(find.text('Save to Device'), findsOneWidget);
+  });
+
+  testWidgets('History detail shows expenses list below Member Breakdown',
+      (tester) async {
+    final now = DateTime(2026, 11, 25);
+    final account = Account(
+      id: 'acc1',
+      name: 'Room 5',
+      currencyCode: 'MMK',
+      createdAt: now,
+    );
+    final members = [
+      Member(id: 'm1', accountId: 'acc1', name: 'Aung', createdAt: now),
+      Member(id: 'm2', accountId: 'acc1', name: 'Kyaw', createdAt: now),
+    ];
+    final cycle = SettlementCycle(
+      id: 'c1',
+      accountId: 'acc1',
+      title: 'Week 1',
+      startDate: now,
+      endDate: now,
+      isSettled: true,
+    );
+    final expenses = [
+      Expense(
+        id: 'e1',
+        accountId: 'acc1',
+        cycleId: 'c1',
+        paidByMemberId: 'm1',
+        title: 'Market Groceries',
+        category: ExpenseCategory.food,
+        amount: 12000,
+        expenseDate: now,
+        createdAt: now,
+        splits: SettlementService.buildEqualSplits(
+          expenseId: 'e1',
+          amount: 12000,
+          participantIds: ['m1', 'm2'],
+          currencyCode: 'MMK',
+        ),
+      ),
+    ];
+    final report = SettlementService.calculateReport(
+      cycle: cycle,
+      allMembers: members,
+      expenses: expenses,
+      currencyCode: 'MMK',
+    );
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: CycleReportView(
+            account: account,
+            report: report,
+            allMembers: members,
+            strings: const AppStrings(AppLanguage.en),
+            isOpenCycle: false,
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    final expensesHeader = find.text('Expenses (1)');
+    await tester.scrollUntilVisible(expensesHeader, 300.0);
+    expect(expensesHeader, findsOneWidget);
+    expect(find.text('Market Groceries'), findsOneWidget);
+  });
 }
 
 class _EmptyDashboardNotifier extends DashboardNotifier {

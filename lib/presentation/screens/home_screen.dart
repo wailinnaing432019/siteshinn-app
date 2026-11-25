@@ -2,8 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/l10n/app_strings.dart';
+import '../../core/utils/category_icon.dart';
 import '../../core/utils/formatters.dart';
-import '../../data/models/expense.dart';
 import '../../providers/app_providers.dart';
 import 'accounts_screen.dart';
 import 'add_expense_screen.dart';
@@ -139,21 +139,6 @@ class _ExpensesTab extends ConsumerStatefulWidget {
 class _ExpensesTabState extends ConsumerState<_ExpensesTab> {
   String _searchQuery = '';
   String? _filterMemberId;
-
-  IconData _iconForCategory(ExpenseCategory category) {
-    switch (category) {
-      case ExpenseCategory.food:
-        return Icons.shopping_basket_outlined;
-      case ExpenseCategory.cooking:
-        return Icons.local_fire_department_outlined;
-      case ExpenseCategory.utilities:
-        return Icons.bolt_outlined;
-      case ExpenseCategory.household:
-        return Icons.cleaning_services_outlined;
-      case ExpenseCategory.other:
-        return Icons.receipt_outlined;
-    }
-  }
 
   @override
   Widget build(BuildContext context) {
@@ -344,7 +329,7 @@ class _ExpensesTabState extends ConsumerState<_ExpensesTab> {
                         leading: CircleAvatar(
                           backgroundColor: colorScheme.primaryContainer,
                           foregroundColor: colorScheme.onPrimaryContainer,
-                          child: Icon(_iconForCategory(expense.category), size: 20),
+                          child: Icon(iconForExpenseCategory(expense.category), size: 20),
                         ),
                         title: Text(
                           expense.title,

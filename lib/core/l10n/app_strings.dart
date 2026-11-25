@@ -110,6 +110,17 @@ class AppStrings {
   String get exportExcel => isBurmese ? 'Excel ထုတ်မည်' : 'Export Excel';
   String get exporting => isBurmese ? 'ဖိုင်ထုတ်နေပါသည်...' : 'Generating file...';
   String get exportFailed => isBurmese ? 'ဖိုင်ထုတ်ယူမှု မအောင်မြင်ပါ' : 'Export failed';
+  String get chooseExportAction => isBurmese ? 'လုပ်ဆောင်ချက် ရွေးချယ်ပါ' : 'Export Options';
+  String get shareFile => isBurmese ? 'တိုက်ရိုက် Share မည်' : 'Share File';
+  String get shareFileSubtitle => isBurmese
+      ? 'Viber, Messenger, Telegram စသည်ဖြင့် ပို့ရန်'
+      : 'Send directly via Viber, Messenger, Telegram, etc.';
+  String get saveToDevice => isBurmese ? 'Save To Device (ဖုန်းထဲသိမ်းမည်)' : 'Save to Device';
+  String get saveToDeviceSubtitle => isBurmese
+      ? 'Downloads သို့မဟုတ် နှစ်သက်ရာ folder တွင် သိမ်းရန်'
+      : 'Save file to Downloads or chosen folder';
+  String get savedToDeviceToast =>
+      isBurmese ? 'ဖုန်းထဲသို့ သိမ်းဆည်းပြီးပါပြီ။' : 'Saved to device successfully.';
 
   // History
   String get historyTitle => isBurmese ? 'စာရင်းရှင်းပြီး မှတ်တမ်းများ' : 'Settlement History';

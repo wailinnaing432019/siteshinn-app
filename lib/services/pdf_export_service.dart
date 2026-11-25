@@ -1,5 +1,6 @@
 import 'dart:io';
 
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/services.dart';
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
@@ -269,5 +270,27 @@ class PdfExportService {
             'SiteShinn - ${account.name} (${strings.displayCycleTitle(report.cycle)})',
       ),
     );
+  }
+
+  static Future<bool> saveCyclePdfToDevice({
+    required Account account,
+    required CycleSettlementReport report,
+    required List<Member> allMembers,
+    required AppStrings strings,
+  }) async {
+    final file = await generateCyclePdf(
+      account: account,
+      report: report,
+      allMembers: allMembers,
+      strings: strings,
+    );
+    final bytes = await file.readAsBytes();
+    final savedUri = await FilePicker.saveFile(
+      dialogTitle: strings.saveToDevice,
+      fileName: p.basename(file.path),
+      bytes: bytes,
+      mimeType: 'application/pdf',
+    );
+    return savedUri != null;
   }
 }

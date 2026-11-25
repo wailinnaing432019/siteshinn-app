@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/l10n/app_strings.dart';
 import '../../core/theme/app_theme.dart';
+import '../../core/utils/category_icon.dart';
 import '../../core/utils/formatters.dart';
 import '../../data/models/account.dart';
 import '../../data/models/member.dart';
@@ -90,6 +91,65 @@ class _CycleReportViewState extends State<CycleReportView> {
       if (mounted) {
         setState(() => _isExporting = false);
       }
+    }
+  }
+
+  Future<void> _showExportOptions({
+    required String title,
+    required Future<void> Function() onShare,
+    required Future<bool> Function() onSaveToDevice,
+  }) async {
+    final strings = widget.strings;
+    final action = await showModalBottomSheet<String>(
+      context: context,
+      showDragHandle: true,
+      builder: (ctx) => SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(16, 4, 16, 16),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+                child: Text(
+                  '$title • ${strings.chooseExportAction}',
+                  style: Theme.of(ctx)
+                      .textTheme
+                      .titleMedium
+                      ?.copyWith(fontWeight: FontWeight.bold),
+                ),
+              ),
+              ListTile(
+                leading: const Icon(Icons.share_outlined),
+                title: Text(strings.shareFile),
+                subtitle: Text(strings.shareFileSubtitle),
+                onTap: () => Navigator.of(ctx).pop('share'),
+              ),
+              ListTile(
+                leading: const Icon(Icons.download_outlined),
+                title: Text(strings.saveToDevice),
+                subtitle: Text(strings.saveToDeviceSubtitle),
+                onTap: () => Navigator.of(ctx).pop('save'),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+
+    if (!mounted || action == null) return;
+    if (action == 'share') {
+      await _export(onShare);
+    } else if (action == 'save') {
+      await _export(() async {
+        final saved = await onSaveToDevice();
+        if (saved && mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text(strings.savedToDeviceToast)),
+          );
+        }
+      });
     }
   }
 
@@ -202,8 +262,16 @@ class _CycleReportViewState extends State<CycleReportView> {
               child: OutlinedButton.icon(
                 onPressed: _isExporting
                     ? null
-                    : () => _export(
-                          () => PdfExportService.shareCyclePdf(
+                    : () => _showExportOptions(
+                          title: strings.exportPdf,
+                          onShare: () => PdfExportService.shareCyclePdf(
+                            account: widget.account,
+                            report: report,
+                            allMembers: widget.allMembers,
+                            strings: strings,
+                          ),
+                          onSaveToDevice: () =>
+                              PdfExportService.saveCyclePdfToDevice(
                             account: widget.account,
                             report: report,
                             allMembers: widget.allMembers,
@@ -219,8 +287,16 @@ class _CycleReportViewState extends State<CycleReportView> {
               child: OutlinedButton.icon(
                 onPressed: _isExporting
                     ? null
-                    : () => _export(
-                          () => ExcelExportService.shareCycleExcel(
+                    : () => _showExportOptions(
+                          title: strings.exportExcel,
+                          onShare: () => ExcelExportService.shareCycleExcel(
+                            account: widget.account,
+                            report: report,
+                            allMembers: widget.allMembers,
+                            strings: strings,
+                          ),
+                          onSaveToDevice: () =>
+                              ExcelExportService.saveCycleExcelToDevice(
                             account: widget.account,
                             report: report,
                             allMembers: widget.allMembers,
@@ -394,6 +470,54 @@ class _CycleReportViewState extends State<CycleReportView> {
             ),
           );
         }),
+
+        if (!widget.isOpenCycle && report.expenses.isNotEmpty) ...[
+          const SizedBox(height: 20),
+          Text(
+            '${strings.navExpenses} (${report.expenses.length})',
+            style: Theme.of(context)
+                .textTheme
+                .titleMedium
+                ?.copyWith(fontWeight: FontWeight.bold),
+          ),
+          const SizedBox(height: 8),
+          ...report.expenses.map((expense) {
+            final memberById = {for (final m in widget.allMembers) m.id: m};
+            final payerName =
+                memberById[expense.paidByMemberId]?.name ?? 'Unknown';
+            final splitCount = expense.splits.isNotEmpty
+                ? expense.splits.length
+                : widget.allMembers.length;
+
+            return Card(
+              margin: const EdgeInsets.only(bottom: 8),
+              child: ListTile(
+                leading: CircleAvatar(
+                  backgroundColor: colorScheme.primaryContainer,
+                  foregroundColor: colorScheme.onPrimaryContainer,
+                  child: Icon(iconForExpenseCategory(expense.category), size: 20),
+                ),
+                title: Text(
+                  expense.title,
+                  style: const TextStyle(fontWeight: FontWeight.w600),
+                ),
+                subtitle: Text(
+                  '${strings.paidByLabel}: $payerName  •  '
+                  '${strings.splitSummary(splitCount, report.balances.length)}  •  '
+                  '${AppFormatters.formatShortDate(expense.expenseDate)}',
+                  style: const TextStyle(fontSize: 12),
+                ),
+                trailing: Text(
+                  AppFormatters.formatAmount(expense.amount, currency),
+                  style: const TextStyle(
+                    fontWeight: FontWeight.bold,
+                    fontSize: 14,
+                  ),
+                ),
+              ),
+            );
+          }),
+        ],
 
         if (widget.isOpenCycle && report.expenses.isNotEmpty) ...[
           const SizedBox(height: 20),

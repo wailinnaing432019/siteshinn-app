@@ -1,6 +1,8 @@
 import 'dart:io';
+import 'dart:typed_data';
 
 import 'package:excel/excel.dart';
+import 'package:file_picker/file_picker.dart';
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 import 'package:share_plus/share_plus.dart';
@@ -12,7 +14,10 @@ import '../data/models/member.dart';
 import '../data/models/settlement_summary.dart';
 
 class ExcelExportService {
-  static Future<File> generateCycleExcel({
+  static const String _xlsxMimeType =
+      'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
+
+  static Future<({String fileName, Uint8List bytes})> buildCycleExcelData({
     required Account account,
     required CycleSettlementReport report,
     required List<Member> allMembers,
@@ -119,16 +124,34 @@ class ExcelExportService {
       ]);
     }
 
-    final bytes = excel.encode();
-    if (bytes == null) {
+    final encoded = excel.encode();
+    if (encoded == null) {
       throw StateError('Failed to encode Excel file.');
     }
 
-    final dir = await getTemporaryDirectory();
     final safeName =
         '${account.name}_$cycleTitle'.replaceAll(RegExp(r'[^\w\-]+'), '_');
-    final file = File(p.join(dir.path, '${safeName}_report.xlsx'));
-    await file.writeAsBytes(bytes, flush: true);
+    return (
+      fileName: '${safeName}_report.xlsx',
+      bytes: Uint8List.fromList(encoded),
+    );
+  }
+
+  static Future<File> generateCycleExcel({
+    required Account account,
+    required CycleSettlementReport report,
+    required List<Member> allMembers,
+    required AppStrings strings,
+  }) async {
+    final data = await buildCycleExcelData(
+      account: account,
+      report: report,
+      allMembers: allMembers,
+      strings: strings,
+    );
+    final dir = await getTemporaryDirectory();
+    final file = File(p.join(dir.path, data.fileName));
+    await file.writeAsBytes(data.bytes, flush: true);
     return file;
   }
 
@@ -151,5 +174,26 @@ class ExcelExportService {
             'SiteShinn - ${account.name} (${strings.displayCycleTitle(report.cycle)})',
       ),
     );
+  }
+
+  static Future<bool> saveCycleExcelToDevice({
+    required Account account,
+    required CycleSettlementReport report,
+    required List<Member> allMembers,
+    required AppStrings strings,
+  }) async {
+    final data = await buildCycleExcelData(
+      account: account,
+      report: report,
+      allMembers: allMembers,
+      strings: strings,
+    );
+    final savedUri = await FilePicker.saveFile(
+      dialogTitle: strings.saveToDevice,
+      fileName: data.fileName,
+      bytes: data.bytes,
+      mimeType: _xlsxMimeType,
+    );
+    return savedUri != null;
   }
 }
