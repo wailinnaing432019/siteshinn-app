@@ -30,7 +30,28 @@ void main() {
     expect(find.textContaining('Welcome to SiteShinn'), findsOneWidget);
     expect(find.text('Member Name 1'), findsOneWidget);
     expect(find.text('Member Name 5'), findsOneWidget);
-    expect(find.text('Create Group & Start'), findsOneWidget);
+    expect(find.text('Create Account & Start'), findsOneWidget);
+  });
+
+  testWidgets('AccountSetupForm switches to Personal Wallet with Opening Balance',
+      (tester) async {
+    SharedPreferences.setMockInitialValues({});
+
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          dashboardProvider.overrideWith(_EmptyDashboardNotifier.new),
+        ],
+        child: const SiteShinnApp(),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Personal Wallet'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Opening Balance'), findsOneWidget);
+    expect(find.text('Member Name 1'), findsNothing);
   });
 
   testWidgets('Settle Up asks user for cycle name without Cycle 1 default',
@@ -151,6 +172,63 @@ void main() {
     expect(expensesHeader, findsOneWidget);
     expect(find.text('Market Groceries'), findsOneWidget);
   });
+
+  testWidgets('Toggling reminder stays on Accounts tab and Home switcher works',
+      (tester) async {
+    SharedPreferences.setMockInitialValues({});
+
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          dashboardProvider.overrideWith(_MultiAccountDashboardNotifier.new),
+        ],
+        child: const SiteShinnApp(),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    // Tapping account title on Ledger/Expenses tab opens Account Switcher sheet.
+    await tester.tap(find.text('Room 5'));
+    await tester.pumpAndSettle();
+    expect(find.text('Switch Account'), findsOneWidget);
+    expect(find.text('My Wallet'), findsOneWidget);
+
+    // Dismiss switcher sheet.
+    await tester.tapAt(const Offset(10, 10));
+    await tester.pumpAndSettle();
+
+    // Navigate to Accounts tab.
+    await tester.tap(find.text('Accounts'));
+    await tester.pumpAndSettle();
+    expect(find.text('Accounts & Settings'), findsOneWidget);
+
+    // Toggle alarm switch ON -> must stay on Accounts tab; Stop button is hidden initially.
+    final alarmSwitch = find.byType(Switch).first;
+    await tester.scrollUntilVisible(alarmSwitch, 200.0);
+    await tester.ensureVisible(alarmSwitch);
+    await tester.pumpAndSettle();
+    await tester.tap(alarmSwitch);
+    await tester.pumpAndSettle();
+
+    expect(tester.widget<Switch>(alarmSwitch).value, isTrue);
+
+    expect(find.text('Accounts & Settings'), findsOneWidget);
+    expect(find.text('Add Alarm'), findsOneWidget);
+    expect(find.text('Alarm Sound'), findsOneWidget);
+    expect(find.text('Stop'), findsNothing);
+
+    // Tapping Test Sound Now temporarily reveals Stop button.
+    final testBtn = find.text('Test Sound Now');
+    await tester.scrollUntilVisible(testBtn, 300.0);
+    await tester.tap(testBtn);
+    await tester.pump();
+    expect(find.text('Stop'), findsOneWidget);
+
+    // Tapping Stop hides Stop button again and clears the preview timer.
+    await tester.tap(find.text('Stop'));
+    await tester.pumpAndSettle();
+    expect(find.text('Stop'), findsNothing);
+  });
 }
 
 class _EmptyDashboardNotifier extends DashboardNotifier {
@@ -211,6 +289,55 @@ class _PopulatedDashboardNotifier extends DashboardNotifier {
       members: members,
       currentCycle: cycle,
       expenses: expenses,
+      currentReport: report,
+      isLoading: false,
+    );
+  }
+}
+
+class _MultiAccountDashboardNotifier extends DashboardNotifier {
+  @override
+  Future<DashboardState> build() async {
+    ref.watch(appSettingsProvider.select((s) => s.isLoaded));
+    ref.watch(appSettingsProvider.select((s) => s.activeAccountId));
+
+    final now = DateTime(2026, 11, 25);
+    final groupAcc = Account(
+      id: 'acc1',
+      name: 'Room 5',
+      currencyCode: 'MMK',
+      createdAt: now,
+    );
+    final personalAcc = Account(
+      id: 'acc2',
+      name: 'My Wallet',
+      currencyCode: 'MMK',
+      accountType: AccountType.personal,
+      openingBalance: 50000,
+      createdAt: now,
+    );
+    final members = [
+      Member(id: 'm1', accountId: 'acc1', name: 'Aung', createdAt: now),
+      Member(id: 'm2', accountId: 'acc1', name: 'Kyaw', createdAt: now),
+    ];
+    final cycle = SettlementCycle(
+      id: 'c1',
+      accountId: 'acc1',
+      title: '',
+      startDate: now,
+    );
+    final report = SettlementService.calculateReport(
+      cycle: cycle,
+      allMembers: members,
+      expenses: const [],
+      currencyCode: 'MMK',
+    );
+    return DashboardState(
+      accounts: [groupAcc, personalAcc],
+      activeAccount: groupAcc,
+      members: members,
+      currentCycle: cycle,
+      expenses: const [],
       currentReport: report,
       isLoading: false,
     );

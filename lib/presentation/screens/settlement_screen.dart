@@ -11,6 +11,7 @@ import '../../data/models/settlement_summary.dart';
 import '../../providers/app_providers.dart';
 import '../../services/excel_export_service.dart';
 import '../../services/pdf_export_service.dart';
+import '../widgets/export_sheet.dart';
 
 class SettlementScreen extends ConsumerWidget {
   const SettlementScreen({super.key});
@@ -77,79 +78,24 @@ class CycleReportView extends StatefulWidget {
 class _CycleReportViewState extends State<CycleReportView> {
   bool _isExporting = false;
 
-  Future<void> _export(Future<void> Function() action) async {
-    setState(() => _isExporting = true);
-    try {
-      await action();
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('${widget.strings.exportFailed}: $e')),
-        );
-      }
-    } finally {
-      if (mounted) {
-        setState(() => _isExporting = false);
-      }
-    }
-  }
-
-  Future<void> _showExportOptions({
+  Future<void> _runExportSheet({
     required String title,
     required Future<void> Function() onShare,
     required Future<bool> Function() onSaveToDevice,
   }) async {
-    final strings = widget.strings;
-    final action = await showModalBottomSheet<String>(
-      context: context,
-      showDragHandle: true,
-      builder: (ctx) => SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(16, 4, 16, 16),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
-                child: Text(
-                  '$title • ${strings.chooseExportAction}',
-                  style: Theme.of(ctx)
-                      .textTheme
-                      .titleMedium
-                      ?.copyWith(fontWeight: FontWeight.bold),
-                ),
-              ),
-              ListTile(
-                leading: const Icon(Icons.share_outlined),
-                title: Text(strings.shareFile),
-                subtitle: Text(strings.shareFileSubtitle),
-                onTap: () => Navigator.of(ctx).pop('share'),
-              ),
-              ListTile(
-                leading: const Icon(Icons.download_outlined),
-                title: Text(strings.saveToDevice),
-                subtitle: Text(strings.saveToDeviceSubtitle),
-                onTap: () => Navigator.of(ctx).pop('save'),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-
-    if (!mounted || action == null) return;
-    if (action == 'share') {
-      await _export(onShare);
-    } else if (action == 'save') {
-      await _export(() async {
-        final saved = await onSaveToDevice();
-        if (saved && mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text(strings.savedToDeviceToast)),
-          );
-        }
-      });
+    setState(() => _isExporting = true);
+    try {
+      await showExportOptionsSheet(
+        context: context,
+        strings: widget.strings,
+        title: title,
+        onShare: onShare,
+        onSaveToDevice: onSaveToDevice,
+      );
+    } finally {
+      if (mounted) {
+        setState(() => _isExporting = false);
+      }
     }
   }
 
@@ -262,7 +208,7 @@ class _CycleReportViewState extends State<CycleReportView> {
               child: OutlinedButton.icon(
                 onPressed: _isExporting
                     ? null
-                    : () => _showExportOptions(
+                    : () => _runExportSheet(
                           title: strings.exportPdf,
                           onShare: () => PdfExportService.shareCyclePdf(
                             account: widget.account,
@@ -287,7 +233,7 @@ class _CycleReportViewState extends State<CycleReportView> {
               child: OutlinedButton.icon(
                 onPressed: _isExporting
                     ? null
-                    : () => _showExportOptions(
+                    : () => _runExportSheet(
                           title: strings.exportExcel,
                           onShare: () => ExcelExportService.shareCycleExcel(
                             account: widget.account,

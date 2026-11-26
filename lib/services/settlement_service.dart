@@ -63,7 +63,9 @@ class SettlementService {
     // Include all active members plus any inactive member referenced in this cycle's expenses.
     final referencedMemberIds = <String>{};
     for (final expense in expenses) {
-      referencedMemberIds.add(expense.paidByMemberId);
+      if (expense.paidByMemberId != null) {
+        referencedMemberIds.add(expense.paidByMemberId!);
+      }
       for (final split in expense.splits) {
         referencedMemberIds.add(split.memberId);
       }
@@ -85,8 +87,11 @@ class SettlementService {
     for (final expense in expenses) {
       final expenseUnits = toMinorUnits(expense.amount, currencyCode);
       totalUnits += expenseUnits;
-      paidUnitsByMember[expense.paidByMemberId] =
-          (paidUnitsByMember[expense.paidByMemberId] ?? 0) + expenseUnits;
+      final payerId = expense.paidByMemberId;
+      if (payerId != null) {
+        paidUnitsByMember[payerId] =
+            (paidUnitsByMember[payerId] ?? 0) + expenseUnits;
+      }
 
       if (expense.splits.isNotEmpty) {
         for (final split in expense.splits) {

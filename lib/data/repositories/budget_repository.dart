@@ -26,10 +26,12 @@ class BudgetRepository {
     return rows.map(Account.fromMap).toList();
   }
 
-  Future<Account> createAccountWithMembers({
+  Future<Account> createAccount({
     required String name,
     required String currencyCode,
-    required List<String> memberNames,
+    required AccountType accountType,
+    double openingBalance = 0,
+    List<String> memberNames = const [],
   }) async {
     final db = await _db;
     final now = DateTime.now();
@@ -37,23 +39,27 @@ class BudgetRepository {
       id: _uuid.v4(),
       name: name.trim(),
       currencyCode: currencyCode,
+      accountType: accountType,
+      openingBalance: openingBalance,
       createdAt: now,
     );
 
     await db.transaction((txn) async {
       await txn.insert('accounts', account.toMap());
 
-      for (var i = 0; i < memberNames.length; i++) {
-        final trimmed = memberNames[i].trim();
-        if (trimmed.isEmpty) continue;
-        final member = Member(
-          id: _uuid.v4(),
-          accountId: account.id,
-          name: trimmed,
-          isActive: true,
-          createdAt: now.add(Duration(milliseconds: i)),
-        );
-        await txn.insert('members', member.toMap());
+      if (accountType == AccountType.group) {
+        for (var i = 0; i < memberNames.length; i++) {
+          final trimmed = memberNames[i].trim();
+          if (trimmed.isEmpty) continue;
+          final member = Member(
+            id: _uuid.v4(),
+            accountId: account.id,
+            name: trimmed,
+            isActive: true,
+            createdAt: now.add(Duration(milliseconds: i)),
+          );
+          await txn.insert('members', member.toMap());
+        }
       }
 
       final initialCycle = SettlementCycle(
@@ -215,7 +221,7 @@ class BudgetRepository {
     }).toList();
   }
 
-  // ---------------- Expenses ----------------
+  // ---------------- Expenses & Transactions ----------------
 
   Future<List<Expense>> getExpensesForCycle(String cycleId) async {
     final db = await _db;
@@ -225,6 +231,24 @@ class BudgetRepository {
       whereArgs: [cycleId],
       orderBy: 'expense_date DESC, created_at DESC',
     );
+    return _attachSplits(db, expenseRows);
+  }
+
+  Future<List<Expense>> getTransactionsForAccount(String accountId) async {
+    final db = await _db;
+    final expenseRows = await db.query(
+      'expenses',
+      where: 'account_id = ?',
+      whereArgs: [accountId],
+      orderBy: 'expense_date DESC, created_at DESC',
+    );
+    return _attachSplits(db, expenseRows);
+  }
+
+  Future<List<Expense>> _attachSplits(
+    Database db,
+    List<Map<String, dynamic>> expenseRows,
+  ) async {
     if (expenseRows.isEmpty) return [];
 
     final expenseIds = expenseRows.map((r) => r['id'] as String).toList();
@@ -251,34 +275,38 @@ class BudgetRepository {
         .toList();
   }
 
-  Future<void> saveExpense({
+  Future<void> saveTransaction({
     String? existingExpenseId,
     required String accountId,
     required String cycleId,
-    required String paidByMemberId,
+    String? paidByMemberId,
+    TransactionType txType = TransactionType.expense,
     required String title,
     required ExpenseCategory category,
     required double amount,
     required DateTime expenseDate,
-    required List<String> participantIds,
+    List<String> participantIds = const [],
     required String currencyCode,
   }) async {
     final db = await _db;
     final expenseId = existingExpenseId ?? _uuid.v4();
     final now = DateTime.now();
 
-    final splits = SettlementService.buildEqualSplits(
-      expenseId: expenseId,
-      amount: amount,
-      participantIds: participantIds,
-      currencyCode: currencyCode,
-    );
+    final splits = (paidByMemberId != null && participantIds.isNotEmpty)
+        ? SettlementService.buildEqualSplits(
+            expenseId: expenseId,
+            amount: amount,
+            participantIds: participantIds,
+            currencyCode: currencyCode,
+          )
+        : const <ExpenseSplit>[];
 
     final expense = Expense(
       id: expenseId,
       accountId: accountId,
       cycleId: cycleId,
       paidByMemberId: paidByMemberId,
+      txType: txType,
       title: title.trim(),
       category: category,
       amount: amount,
@@ -293,6 +321,7 @@ class BudgetRepository {
           'expenses',
           {
             'paid_by_member_id': expense.paidByMemberId,
+            'tx_type': expense.txType.key,
             'title': expense.title,
             'category': expense.category.key,
             'amount': expense.amount,

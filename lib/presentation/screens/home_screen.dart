@@ -8,6 +8,7 @@ import '../../providers/app_providers.dart';
 import 'accounts_screen.dart';
 import 'add_expense_screen.dart';
 import 'history_screen.dart';
+import 'personal_ledger_view.dart';
 import 'settlement_screen.dart';
 
 class HomeScreen extends ConsumerStatefulWidget {
@@ -26,20 +27,76 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     final language = ref.watch(appSettingsProvider.select((s) => s.language));
     final dashboard = ref.watch(dashboardProvider).value;
     final account = dashboard?.activeAccount;
+    final isPersonal = account?.isPersonal ?? false;
 
-    final pages = [
-      _ExpensesTab(onGoToSettle: () => setState(() => _tabIndex = 1)),
-      const SettlementScreen(),
-      const HistoryScreen(),
-      const AccountsScreen(),
-    ];
+    final pages = isPersonal
+        ? const [
+            PersonalLedgerTab(),
+            PersonalSummaryTab(),
+            AccountsScreen(),
+          ]
+        : [
+            _ExpensesTab(onGoToSettle: () => setState(() => _tabIndex = 1)),
+            const SettlementScreen(),
+            const HistoryScreen(),
+            const AccountsScreen(),
+          ];
 
-    final titles = [
-      account?.name ?? strings.appTitle,
-      strings.settlementTitle,
-      strings.historyTitle,
-      strings.accountsTitle,
-    ];
+    final titles = isPersonal
+        ? [
+            account?.name ?? strings.appTitle,
+            strings.personalSummaryTitle,
+            strings.accountsTitle,
+          ]
+        : [
+            account?.name ?? strings.appTitle,
+            strings.settlementTitle,
+            strings.historyTitle,
+            strings.accountsTitle,
+          ];
+
+    final destinations = isPersonal
+        ? [
+            NavigationDestination(
+              icon: const Icon(Icons.account_balance_wallet_outlined),
+              selectedIcon: const Icon(Icons.account_balance_wallet),
+              label: strings.navLedger,
+            ),
+            NavigationDestination(
+              icon: const Icon(Icons.pie_chart_outline),
+              selectedIcon: const Icon(Icons.pie_chart),
+              label: strings.navSummary,
+            ),
+            NavigationDestination(
+              icon: const Icon(Icons.tune_outlined),
+              selectedIcon: const Icon(Icons.tune),
+              label: strings.navAccounts,
+            ),
+          ]
+        : [
+            NavigationDestination(
+              icon: const Icon(Icons.receipt_long_outlined),
+              selectedIcon: const Icon(Icons.receipt_long),
+              label: strings.navExpenses,
+            ),
+            NavigationDestination(
+              icon: const Icon(Icons.balance_outlined),
+              selectedIcon: const Icon(Icons.balance),
+              label: strings.navSettle,
+            ),
+            NavigationDestination(
+              icon: const Icon(Icons.history_outlined),
+              selectedIcon: const Icon(Icons.history),
+              label: strings.navHistory,
+            ),
+            NavigationDestination(
+              icon: const Icon(Icons.group_outlined),
+              selectedIcon: const Icon(Icons.group),
+              label: strings.navAccounts,
+            ),
+          ];
+
+    final safeIndex = _tabIndex.clamp(0, pages.length - 1);
 
     return Scaffold(
       appBar: AppBar(
@@ -57,22 +114,57 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
             ),
           ),
         ),
-        title: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              titles[_tabIndex],
-              style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
-            ),
-            if (_tabIndex == 0 && dashboard?.currentCycle != null)
-              Text(
-                '${strings.displayCycleTitle(dashboard!.currentCycle!)} • ${dashboard.activeMembers.length} ${strings.membersSection}',
-                style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                      color: Theme.of(context).colorScheme.onSurfaceVariant,
-                    ),
+        title: safeIndex == 0 && account != null
+            ? InkWell(
+                borderRadius: BorderRadius.circular(10),
+                onTap: () => _showAccountSwitcherSheet(
+                  context,
+                  ref,
+                  strings,
+                  dashboard?.accounts ?? [],
+                  account.id,
+                ),
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 4),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Flexible(
+                            child: Text(
+                              titles[safeIndex],
+                              overflow: TextOverflow.ellipsis,
+                              style: const TextStyle(
+                                fontWeight: FontWeight.bold,
+                                fontSize: 18,
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 2),
+                          const Icon(Icons.keyboard_arrow_down_rounded, size: 22),
+                        ],
+                      ),
+                      Text(
+                        isPersonal
+                            ? '${strings.personalAccountType} • ${account.currencyCode}'
+                            : '${strings.displayCycleTitle(dashboard!.currentCycle!)} • ${dashboard.activeMembers.length} ${strings.membersSection}',
+                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                              color: Theme.of(context)
+                                  .colorScheme
+                                  .onSurfaceVariant,
+                            ),
+                      ),
+                    ],
+                  ),
+                ),
+              )
+            : Text(
+                titles[safeIndex],
+                style:
+                    const TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
               ),
-          ],
-        ),
         actions: [
           TextButton(
             onPressed: () {
@@ -85,8 +177,8 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
           ),
         ],
       ),
-      body: IndexedStack(index: _tabIndex, children: pages),
-      floatingActionButton: _tabIndex == 0
+      body: IndexedStack(index: safeIndex, children: pages),
+      floatingActionButton: safeIndex == 0
           ? FloatingActionButton.extended(
               onPressed: () {
                 Navigator.of(context).push(
@@ -94,34 +186,99 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                 );
               },
               icon: const Icon(Icons.add),
-              label: Text(strings.addExpense),
+              label: Text(
+                isPersonal ? strings.addTransaction : strings.addExpense,
+              ),
             )
           : null,
       bottomNavigationBar: NavigationBar(
-        selectedIndex: _tabIndex,
+        selectedIndex: safeIndex,
         onDestinationSelected: (idx) => setState(() => _tabIndex = idx),
-        destinations: [
-          NavigationDestination(
-            icon: const Icon(Icons.receipt_long_outlined),
-            selectedIcon: const Icon(Icons.receipt_long),
-            label: strings.navExpenses,
+        destinations: destinations,
+      ),
+    );
+  }
+
+  Future<void> _showAccountSwitcherSheet(
+    BuildContext context,
+    WidgetRef ref,
+    AppStrings strings,
+    List<dynamic> accounts,
+    String activeAccountId,
+  ) async {
+    await showModalBottomSheet<void>(
+      context: context,
+      showDragHandle: true,
+      builder: (ctx) => SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(16, 4, 16, 16),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Padding(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+                child: Text(
+                  strings.switchAccount,
+                  style: Theme.of(ctx)
+                      .textTheme
+                      .titleMedium
+                      ?.copyWith(fontWeight: FontWeight.bold),
+                ),
+              ),
+              ...accounts.map((acc) {
+                final selected = acc.id == activeAccountId;
+                return ListTile(
+                  leading: CircleAvatar(
+                    backgroundColor: selected
+                        ? Theme.of(ctx).colorScheme.primaryContainer
+                        : Theme.of(ctx).colorScheme.surfaceContainerHighest,
+                    child: Icon(
+                      acc.isPersonal
+                          ? Icons.account_balance_wallet_outlined
+                          : Icons.group_outlined,
+                    ),
+                  ),
+                  title: Text(
+                    acc.name,
+                    style: const TextStyle(fontWeight: FontWeight.w600),
+                  ),
+                  subtitle: Text(
+                    '${acc.isPersonal ? strings.personalAccountType : strings.groupAccountType} • ${acc.currencyCode}',
+                  ),
+                  trailing: selected
+                      ? Icon(
+                          Icons.check_circle,
+                          color: Theme.of(ctx).colorScheme.primary,
+                        )
+                      : null,
+                  onTap: () {
+                    Navigator.of(ctx).pop();
+                    if (!selected) {
+                      ref
+                          .read(dashboardProvider.notifier)
+                          .switchAccount(acc.id);
+                    }
+                  },
+                );
+              }),
+              const Divider(),
+              ListTile(
+                leading: const Icon(Icons.add_circle_outline),
+                title: Text(strings.createAccount),
+                onTap: () {
+                  Navigator.of(ctx).pop();
+                  Navigator.of(context).push(
+                    MaterialPageRoute(
+                      builder: (_) => const CreateAccountScreen(),
+                    ),
+                  );
+                },
+              ),
+            ],
           ),
-          NavigationDestination(
-            icon: const Icon(Icons.balance_outlined),
-            selectedIcon: const Icon(Icons.balance),
-            label: strings.navSettle,
-          ),
-          NavigationDestination(
-            icon: const Icon(Icons.history_outlined),
-            selectedIcon: const Icon(Icons.history),
-            label: strings.navHistory,
-          ),
-          NavigationDestination(
-            icon: const Icon(Icons.group_outlined),
-            selectedIcon: const Icon(Icons.group),
-            label: strings.navAccounts,
-          ),
-        ],
+        ),
       ),
     );
   }

@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../core/utils/formatters.dart';
+import '../../data/models/account.dart';
 import '../../providers/app_providers.dart';
 
 class AccountSetupForm extends ConsumerStatefulWidget {
@@ -9,6 +11,8 @@ class AccountSetupForm extends ConsumerStatefulWidget {
   final Future<void> Function(
     String name,
     String currencyCode,
+    AccountType accountType,
+    double openingBalance,
     List<String> memberNames,
   ) onSubmit;
 
@@ -26,10 +30,12 @@ class AccountSetupForm extends ConsumerStatefulWidget {
 class _AccountSetupFormState extends ConsumerState<AccountSetupForm> {
   final _formKey = GlobalKey<FormState>();
   late final TextEditingController _accountNameController;
+  final _openingBalanceController = TextEditingController(text: '0');
   final List<TextEditingController> _memberControllers = List.generate(
     5,
     (_) => TextEditingController(),
   );
+  AccountType _accountType = AccountType.group;
   String _currencyCode = 'MMK';
   bool _isSaving = false;
 
@@ -43,6 +49,7 @@ class _AccountSetupFormState extends ConsumerState<AccountSetupForm> {
   @override
   void dispose() {
     _accountNameController.dispose();
+    _openingBalanceController.dispose();
     for (final c in _memberControllers) {
       c.dispose();
     }
@@ -67,14 +74,40 @@ class _AccountSetupFormState extends ConsumerState<AccountSetupForm> {
     if (!_formKey.currentState!.validate()) return;
     final strings = ref.read(appStringsProvider);
 
-    final names = _memberControllers
-        .map((c) => c.text.trim())
-        .where((n) => n.isNotEmpty)
-        .toList();
+    if (_accountType == AccountType.group) {
+      final names = _memberControllers
+          .map((c) => c.text.trim())
+          .where((n) => n.isNotEmpty)
+          .toList();
 
-    if (names.length < 2) {
+      if (names.length < 2) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(strings.needTwoMembers)),
+        );
+        return;
+      }
+
+      setState(() => _isSaving = true);
+      try {
+        await widget.onSubmit(
+          _accountNameController.text.trim(),
+          _currencyCode,
+          AccountType.group,
+          0,
+          names,
+        );
+      } finally {
+        if (mounted) setState(() => _isSaving = false);
+      }
+      return;
+    }
+
+    final opening = double.tryParse(
+      _openingBalanceController.text.replaceAll(',', '').trim(),
+    );
+    if (opening == null || opening < 0) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(strings.needTwoMembers)),
+        SnackBar(content: Text(strings.invalidOpeningBalance)),
       );
       return;
     }
@@ -84,12 +117,12 @@ class _AccountSetupFormState extends ConsumerState<AccountSetupForm> {
       await widget.onSubmit(
         _accountNameController.text.trim(),
         _currencyCode,
-        names,
+        AccountType.personal,
+        opening,
+        const [],
       );
     } finally {
-      if (mounted) {
-        setState(() => _isSaving = false);
-      }
+      if (mounted) setState(() => _isSaving = false);
     }
   }
 
@@ -109,11 +142,58 @@ class _AccountSetupFormState extends ConsumerState<AccountSetupForm> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
+                  Text(
+                    strings.accountTypeLabel,
+                    style: Theme.of(context)
+                        .textTheme
+                        .titleSmall
+                        ?.copyWith(fontWeight: FontWeight.w600),
+                  ),
+                  const SizedBox(height: 8),
+                  SegmentedButton<AccountType>(
+                    segments: [
+                      ButtonSegment(
+                        value: AccountType.group,
+                        icon: const Icon(Icons.group_outlined, size: 18),
+                        label: Text(strings.groupAccountType),
+                      ),
+                      ButtonSegment(
+                        value: AccountType.personal,
+                        icon: const Icon(Icons.account_balance_wallet_outlined, size: 18),
+                        label: Text(strings.personalAccountType),
+                      ),
+                    ],
+                    selected: {_accountType},
+                    onSelectionChanged: (sel) {
+                      setState(() {
+                        _accountType = sel.first;
+                        if (_accountType == AccountType.personal &&
+                            _accountNameController.text == 'Room 5 Expenses') {
+                          _accountNameController.text = 'My Wallet';
+                        } else if (_accountType == AccountType.group &&
+                            _accountNameController.text == 'My Wallet') {
+                          _accountNameController.text = 'Room 5 Expenses';
+                        }
+                      });
+                    },
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    _accountType == AccountType.group
+                        ? strings.groupAccountDesc
+                        : strings.personalAccountDesc,
+                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                          color: colorScheme.onSurfaceVariant,
+                        ),
+                  ),
+                  const SizedBox(height: 16),
                   TextFormField(
                     controller: _accountNameController,
                     decoration: InputDecoration(
                       labelText: strings.accountNameLabel,
-                      hintText: 'e.g. Room 5 Expenses',
+                      hintText: _accountType == AccountType.group
+                          ? 'e.g. Room 5 Expenses'
+                          : 'e.g. My Wallet',
                       prefixIcon: const Icon(Icons.home_work_outlined),
                     ),
                     validator: (v) => (v == null || v.trim().isEmpty)
@@ -139,55 +219,78 @@ class _AccountSetupFormState extends ConsumerState<AccountSetupForm> {
                       }
                     },
                   ),
-                  const SizedBox(height: 20),
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Expanded(
-                        child: Text(
-                          strings.initialMembersHint,
-                          style: Theme.of(context)
-                              .textTheme
-                              .titleSmall
-                              ?.copyWith(fontWeight: FontWeight.w600),
+                  const SizedBox(height: 18),
+                  if (_accountType == AccountType.personal) ...[
+                    TextFormField(
+                      controller: _openingBalanceController,
+                      keyboardType:
+                          const TextInputType.numberWithOptions(decimal: true),
+                      decoration: InputDecoration(
+                        labelText: strings.openingBalanceLabel,
+                        suffixText:
+                            AppFormatters.symbolForCurrency(_currencyCode),
+                        prefixIcon:
+                            const Icon(Icons.account_balance_outlined),
+                      ),
+                      validator: (v) {
+                        final val =
+                            double.tryParse((v ?? '').replaceAll(',', '').trim());
+                        if (val == null || val < 0) {
+                          return strings.invalidOpeningBalance;
+                        }
+                        return null;
+                      },
+                    ),
+                  ] else ...[
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Expanded(
+                          child: Text(
+                            strings.initialMembersHint,
+                            style: Theme.of(context)
+                                .textTheme
+                                .titleSmall
+                                ?.copyWith(fontWeight: FontWeight.w600),
+                          ),
                         ),
-                      ),
-                      TextButton.icon(
-                        onPressed: _addMemberField,
-                        icon: const Icon(Icons.person_add_alt_1, size: 18),
-                        label: Text(strings.add),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 8),
-                  ...List.generate(_memberControllers.length, (index) {
-                    return Padding(
-                      padding: const EdgeInsets.only(bottom: 10),
-                      child: Row(
-                        children: [
-                          Expanded(
-                            child: TextFormField(
-                              controller: _memberControllers[index],
-                              decoration: InputDecoration(
-                                labelText:
-                                    '${strings.memberNameLabel} ${index + 1}',
-                                prefixIcon: const Icon(Icons.person_outline),
-                                isDense: true,
+                        TextButton.icon(
+                          onPressed: _addMemberField,
+                          icon: const Icon(Icons.person_add_alt_1, size: 18),
+                          label: Text(strings.add),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 8),
+                    ...List.generate(_memberControllers.length, (index) {
+                      return Padding(
+                        padding: const EdgeInsets.only(bottom: 10),
+                        child: Row(
+                          children: [
+                            Expanded(
+                              child: TextFormField(
+                                controller: _memberControllers[index],
+                                decoration: InputDecoration(
+                                  labelText:
+                                      '${strings.memberNameLabel} ${index + 1}',
+                                  prefixIcon: const Icon(Icons.person_outline),
+                                  isDense: true,
+                                ),
                               ),
                             ),
-                          ),
-                          if (_memberControllers.length > 2) ...[
-                            const SizedBox(width: 6),
-                            IconButton(
-                              onPressed: () => _removeMemberField(index),
-                              icon: const Icon(Icons.remove_circle_outline),
-                              color: colorScheme.error,
-                            ),
+                            if (_memberControllers.length > 2) ...[
+                              const SizedBox(width: 6),
+                              IconButton(
+                                onPressed: () => _removeMemberField(index),
+                                icon: const Icon(Icons.remove_circle_outline),
+                                color: colorScheme.error,
+                              ),
+                            ],
                           ],
-                        ],
-                      ),
-                    );
-                  }),
+                        ),
+                      );
+                    }),
+                  ],
                 ],
               ),
             ),

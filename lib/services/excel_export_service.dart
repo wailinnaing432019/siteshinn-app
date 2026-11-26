@@ -11,6 +11,7 @@ import '../core/l10n/app_strings.dart';
 import '../core/utils/formatters.dart';
 import '../data/models/account.dart';
 import '../data/models/member.dart';
+import '../data/models/personal_summary.dart';
 import '../data/models/settlement_summary.dart';
 
 class ExcelExportService {
@@ -186,6 +187,127 @@ class ExcelExportService {
       account: account,
       report: report,
       allMembers: allMembers,
+      strings: strings,
+    );
+    final savedUri = await FilePicker.saveFile(
+      dialogTitle: strings.saveToDevice,
+      fileName: data.fileName,
+      bytes: data.bytes,
+      mimeType: _xlsxMimeType,
+    );
+    return savedUri != null;
+  }
+
+  static Future<({String fileName, Uint8List bytes})> buildPersonalExcelData({
+    required Account account,
+    required PersonalLedgerSummary summary,
+    required String periodLabel,
+    required AppStrings strings,
+  }) async {
+    final excel = Excel.createExcel();
+    final currency = account.currencyCode;
+
+    final summarySheet = excel['Wallet Summary'];
+    final txSheet = excel['Transactions'];
+
+    if (excel.sheets.containsKey('Sheet1')) {
+      excel.delete('Sheet1');
+    }
+
+    summarySheet.appendRow([
+      TextCellValue('SiteShinn (စိုက်ရှင်း) - Personal Wallet Report'),
+    ]);
+    summarySheet.appendRow([
+      TextCellValue('Account'),
+      TextCellValue(account.name),
+      TextCellValue('Currency'),
+      TextCellValue(currency),
+    ]);
+    summarySheet.appendRow([
+      TextCellValue('Period'),
+      TextCellValue(periodLabel),
+    ]);
+    summarySheet.appendRow([]);
+    summarySheet.appendRow([
+      TextCellValue(strings.openingBalanceLabel),
+      DoubleCellValue(summary.openingBalance),
+    ]);
+    summarySheet.appendRow([
+      TextCellValue(strings.totalIncomeLabel),
+      DoubleCellValue(summary.periodIncome),
+    ]);
+    summarySheet.appendRow([
+      TextCellValue(strings.totalExpenseLabel),
+      DoubleCellValue(summary.periodExpense),
+    ]);
+    summarySheet.appendRow([
+      TextCellValue(strings.currentBalanceLabel),
+      DoubleCellValue(summary.currentBalance),
+    ]);
+
+    txSheet.appendRow([
+      TextCellValue(strings.dateLabel),
+      TextCellValue(strings.titleLabel.split('(').first.trim()),
+      TextCellValue(strings.categoryLabel),
+      TextCellValue('Type'),
+      TextCellValue('${strings.amountLabel} ($currency)'),
+    ]);
+    for (final tx in summary.filteredTransactions) {
+      txSheet.appendRow([
+        TextCellValue(AppFormatters.formatDate(tx.expenseDate)),
+        TextCellValue(tx.title),
+        TextCellValue(strings.categoryName(tx.category)),
+        TextCellValue(tx.isIncome ? strings.incomeLabel : strings.expenseLabel),
+        DoubleCellValue(tx.isIncome ? tx.amount : -tx.amount),
+      ]);
+    }
+
+    final encoded = excel.encode();
+    if (encoded == null) {
+      throw StateError('Failed to encode Excel file.');
+    }
+
+    final safeName =
+        '${account.name}_$periodLabel'.replaceAll(RegExp(r'[^\w\-]+'), '_');
+    return (
+      fileName: '${safeName}_wallet.xlsx',
+      bytes: Uint8List.fromList(encoded),
+    );
+  }
+
+  static Future<void> sharePersonalExcel({
+    required Account account,
+    required PersonalLedgerSummary summary,
+    required String periodLabel,
+    required AppStrings strings,
+  }) async {
+    final data = await buildPersonalExcelData(
+      account: account,
+      summary: summary,
+      periodLabel: periodLabel,
+      strings: strings,
+    );
+    final dir = await getTemporaryDirectory();
+    final file = File(p.join(dir.path, data.fileName));
+    await file.writeAsBytes(data.bytes, flush: true);
+    await SharePlus.instance.share(
+      ShareParams(
+        files: [XFile(file.path)],
+        subject: 'SiteShinn - ${account.name} ($periodLabel)',
+      ),
+    );
+  }
+
+  static Future<bool> savePersonalExcelToDevice({
+    required Account account,
+    required PersonalLedgerSummary summary,
+    required String periodLabel,
+    required AppStrings strings,
+  }) async {
+    final data = await buildPersonalExcelData(
+      account: account,
+      summary: summary,
+      periodLabel: periodLabel,
       strings: strings,
     );
     final savedUri = await FilePicker.saveFile(

@@ -134,3 +134,37 @@ For an open or closed cycle:
 - Group Invite Code / Link so all 5 roommates join the same cloud account on their own phones.
 - Real-time sync + push notifications when a member adds an expense or initiates settlement.
 - Migration helper to upload existing V1 local SQLite data into a V2 cloud account.
+
+---
+
+## 8. Version 1.1 Plan — Personal Wallet Mode & Daily Alarm Reminder
+
+### 8.1 Personal Ledger / Solo Account Mode (No Members Required)
+- **Account Type Choice (`account_type`):**
+  - `group`: Existing shared roommate expense & settlement mode (with members + "Who Pays Whom").
+  - `personal`: Solo wallet / personal cashbook mode (no members or split required).
+- **Personal Account Fields & Math:**
+  - **Opening Balance (`opening_balance`):** Starting cash/bank balance set when creating the personal account (editable anytime).
+  - **Transactions (`type`: `income` | `expense`):**
+    - **Income Categories:** Salary, Business/Freelance, Gift/Bonus, Refund, Other Income.
+    - **Expense Categories:** Food, Transport, Bills/Utilities, Shopping, Health, Other.
+  - **Balance Formula:**
+    $$\text{Current Balance} = \text{Opening Balance} + \text{Total Income} - \text{Total Expense}$$
+- **Personal Dashboard & History:**
+  - Summary banner showing **Current Balance**, **Opening Balance**, **Total Income (+)**, and **Total Expense (-)**.
+  - Filter by month (`All` or specific month `YYYY-MM`) and type (`All` / `Income` / `Expense`).
+  - Export personal summary + transaction list to **PDF** & **Excel (`.xlsx`)** (Share + Save to Device).
+
+### 8.2 Daily Reminder & China ROM Alarm Mode
+- **Why AlarmClock Mode for China ROMs:**
+  - Chinese OEM ROMs (Xiaomi HyperOS/MIUI, OPPO ColorOS, Vivo OriginOS/Funtouch, Huawei HarmonyOS) aggressively kill normal background notifications and `WorkManager` tasks.
+  - Scheduling via Android **`AlarmManager.setAlarmClock`** (`AndroidScheduleMode.alarmClock`) registers an official system alarm trigger, which wakes the device reliably out of Doze/background sleep, plus `BOOT_COMPLETED` receiver re-schedules after phone reboot.
+- **Reminder Settings (in Accounts / Settings):**
+  - **Enable Daily Reminder** toggle (default: **7:00 PM / 19:00**, customizable via Time Picker).
+  - **Reminder Style:**
+    - *Notification Mode:* Standard daily notification at chosen time.
+    - *Alarm Mode (China ROM Recommended):* Uses `alarmClock` schedule + high-priority Alarm-stream notification channel (`Importance.max`, `AudioAttributesUsage.alarm`, wakes screen / rings loudly like an alarm).
+  - **Quick China ROM Helper:** In-app shortcut button to open Android App Info / Battery Optimization settings with a brief tip (set Battery to *No restrictions* and enable *Autostart* for Xiaomi/OPPO/Vivo).
+- **Database Migration (SQLite v1 → v2):**
+  - `accounts`: add `account_type TEXT NOT NULL DEFAULT 'group'`, `opening_balance REAL NOT NULL DEFAULT 0`.
+  - `expenses` (or transactions): add `tx_type TEXT NOT NULL DEFAULT 'expense'`, make `paid_by_member_id` nullable (`TEXT`) for `personal` accounts so existing group data migrates losslessly.

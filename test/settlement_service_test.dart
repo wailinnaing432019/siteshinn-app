@@ -1,6 +1,8 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:site_shinn/data/models/account.dart';
 import 'package:site_shinn/data/models/expense.dart';
 import 'package:site_shinn/data/models/member.dart';
+import 'package:site_shinn/data/models/personal_summary.dart';
 import 'package:site_shinn/data/models/settlement_cycle.dart';
 import 'package:site_shinn/services/settlement_service.dart';
 
@@ -191,6 +193,75 @@ void main() {
       expect(report.transfers.first.fromMemberName, 'Kyaw');
       expect(report.transfers.first.toMemberName, 'Aung');
       expect(report.transfers.first.amount, 5000);
+    });
+  });
+
+  group('PersonalLedgerSummary.compute', () {
+    test('calculates opening balance + income - expense and filters by date range', () {
+      final account = Account(
+        id: 'p1',
+        name: 'My Wallet',
+        currencyCode: 'MMK',
+        accountType: AccountType.personal,
+        openingBalance: 100000,
+        createdAt: now,
+      );
+      final txs = [
+        Expense(
+          id: 't1',
+          accountId: 'p1',
+          cycleId: 'c1',
+          txType: TransactionType.income,
+          title: 'Salary',
+          category: ExpenseCategory.salary,
+          amount: 500000,
+          expenseDate: DateTime(2026, 11, 1),
+          createdAt: now,
+        ),
+        Expense(
+          id: 't2',
+          accountId: 'p1',
+          cycleId: 'c1',
+          txType: TransactionType.expense,
+          title: 'Lunch',
+          category: ExpenseCategory.food,
+          amount: 25000,
+          expenseDate: DateTime(2026, 11, 15),
+          createdAt: now,
+        ),
+        Expense(
+          id: 't3',
+          accountId: 'p1',
+          cycleId: 'c1',
+          txType: TransactionType.expense,
+          title: 'October Bus',
+          category: ExpenseCategory.transport,
+          amount: 15000,
+          expenseDate: DateTime(2026, 10, 20),
+          createdAt: now,
+        ),
+      ];
+
+      final all = PersonalLedgerSummary.compute(
+        account: account,
+        allTransactions: txs,
+      );
+      expect(all.openingBalance, 100000);
+      expect(all.totalIncome, 500000);
+      expect(all.totalExpense, 40000);
+      expect(all.currentBalance, 560000);
+      expect(all.filteredTransactions.length, 3);
+
+      final novOnly = PersonalLedgerSummary.compute(
+        account: account,
+        allTransactions: txs,
+        startDate: DateTime(2026, 11, 1),
+        endDate: DateTime(2026, 11, 30),
+      );
+      expect(novOnly.currentBalance, 560000);
+      expect(novOnly.periodIncome, 500000);
+      expect(novOnly.periodExpense, 25000);
+      expect(novOnly.filteredTransactions.length, 2);
     });
   });
 }

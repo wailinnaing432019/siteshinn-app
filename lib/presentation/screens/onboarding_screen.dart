@@ -70,12 +70,14 @@ class OnboardingScreen extends ConsumerWidget {
               AccountSetupForm(
                 initialAccountName: 'Room 5 Expenses',
                 submitLabel: strings.setupAccountBtn,
-                onSubmit: (name, currency, members) {
+                onSubmit: (name, currency, accountType, openingBalance, members) {
                   return ref
                       .read(dashboardProvider.notifier)
                       .createAccount(
                         name: name,
                         currencyCode: currency,
+                        accountType: accountType,
+                        openingBalance: openingBalance,
                         memberNames: members,
                       );
                 },
