@@ -391,6 +391,7 @@ class DashboardNotifier extends AsyncNotifier<DashboardState> {
   Timer? _realtimeDebounce;
   String? _subscribedAccountId;
   bool _offlineFallback = false;
+  bool _isMirroring = false;
 
   BudgetRepository get _localRepo => ref.read(localRepositoryProvider);
   CloudBudgetRepository get _cloudRepo => ref.read(cloudRepositoryProvider);
@@ -492,13 +493,26 @@ class DashboardNotifier extends AsyncNotifier<DashboardState> {
       );
     }
 
+    var effectivePreferredId = preferredAccountId;
     try {
-      return await _loadFromRepo(
+      final uid = _currentUserId;
+      if (uid != null) {
+        await _cloudRepo.syncPendingOpsToCloud(uid, _localRepo);
+        final migratedMap =
+            await _cloudRepo.migrateLocalToCloudWithMapping(_localRepo);
+        if (effectivePreferredId != null &&
+            migratedMap.containsKey(effectivePreferredId)) {
+          effectivePreferredId = migratedMap[effectivePreferredId];
+        }
+      }
+      final stateData = await _loadFromRepo(
         _cloudRepo,
-        preferredAccountId,
+        effectivePreferredId,
         isCloud: true,
         isOfflineFallback: false,
       );
+      unawaited(_mirrorInBackground());
+      return stateData;
     } catch (e) {
       if (AppErrorFormatter.isOfflineError(e) ||
           !(await AppErrorFormatter.hasNetworkConnection())) {
@@ -515,6 +529,34 @@ class DashboardNotifier extends AsyncNotifier<DashboardState> {
     }
   }
 
+  Future<void> _mirrorInBackground() async {
+    if (_isMirroring || !_isCloud) return;
+    _isMirroring = true;
+    try {
+      await _cloudRepo.mirrorToLocal(_localRepo);
+    } catch (_) {
+      // Background mirror is best-effort; offline cache keeps prior snapshot.
+    } finally {
+      _isMirroring = false;
+    }
+  }
+
+  Future<void> prepareForLogout({required bool keepOfflineCopy}) async {
+    final uid = _currentUserId;
+    if (uid == null) return;
+    if (keepOfflineCopy) {
+      if (_isCloud) {
+        try {
+          await _cloudRepo
+              .mirrorToLocal(_localRepo)
+              .timeout(const Duration(seconds: 6));
+        } catch (_) {}
+      }
+    } else {
+      await _localRepo.clearCachedDataForUser(uid);
+    }
+  }
+
   Future<DashboardState> _loadFromRepo(
     BudgetDataSource repo,
     String? preferredAccountId, {
@@ -527,7 +569,7 @@ class DashboardNotifier extends AsyncNotifier<DashboardState> {
     if (isCloud) {
       try {
         final uid = _currentUserId;
-        final localAccounts = await _localRepo.getAccounts();
+        final localAccounts = await _localRepo.getUnmigratedGuestAccounts();
         final cloudIds = accounts.map((a) => a.id).toSet();
         localUnmigratedCount = localAccounts
             .where(
@@ -793,7 +835,7 @@ class DashboardNotifier extends AsyncNotifier<DashboardState> {
     for (final cycle in recentChronological) {
       final expenses = await _repo.getExpensesForCycle(cycle.id);
       final total = expenses
-          .where((e) => !e.isIncome)
+          .where((e) => !e.isIncome && !e.isAdvance)
           .fold<double>(0, (acc, e) => acc + e.amount);
       points.add(CycleTrendPoint(cycle: cycle, totalExpense: total));
     }

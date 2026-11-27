@@ -719,6 +719,17 @@ void main() {
         expenseDate: d2,
         createdAt: d2,
       ),
+      Expense(
+        id: 'adv1',
+        accountId: 'acc1',
+        cycleId: 'c1',
+        txType: TransactionType.advance,
+        title: 'Advance',
+        category: ExpenseCategory.other,
+        amount: 99000,
+        expenseDate: d2,
+        createdAt: d2,
+      ),
     ];
 
     final slices = AnalyticsService.computeCategoryBreakdown(items);
@@ -732,6 +743,7 @@ void main() {
     expect(daily.first.income, 500000);
     expect(daily.first.expense, 30000);
     expect(daily.last.expense, 10000);
+    expect(const AppStrings(AppLanguage.en).keepOfflineOnLogout, isNotEmpty);
   });
 
   testWidgets(

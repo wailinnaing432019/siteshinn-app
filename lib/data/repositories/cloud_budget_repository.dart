@@ -499,6 +499,32 @@ class CloudBudgetRepository implements BudgetDataSource {
     await batch.commit();
   }
 
+  SettlementTransfer _mapTransferDoc(
+    QueryDocumentSnapshot<Map<String, dynamic>> doc,
+    String accountId,
+    Map<String, Member> memberById,
+  ) {
+    _transferAccountIds[doc.id] = accountId;
+    final row = doc.data();
+    final fromId = row['from_member_id'] as String;
+    final toId = row['to_member_id'] as String;
+    final rawPaid = row['is_paid'];
+    final isPaid = rawPaid is bool ? rawPaid : (rawPaid == 1);
+    return SettlementTransfer(
+      id: doc.id,
+      cycleId: row['cycle_id'] as String,
+      fromMemberId: fromId,
+      toMemberId: toId,
+      fromMemberName: memberById[fromId]?.name ?? 'Unknown',
+      toMemberName: memberById[toId]?.name ?? 'Unknown',
+      amount: (row['amount'] as num).toDouble(),
+      isPaid: isPaid,
+      paidAt: row['paid_at'] != null
+          ? DateTime.parse(row['paid_at'] as String)
+          : null,
+    );
+  }
+
   @override
   Future<List<SettlementTransfer>> getTransfersForCycle({
     required String cycleId,
@@ -511,27 +537,9 @@ class CloudBudgetRepository implements BudgetDataSource {
         .where('cycle_id', isEqualTo: cycleId)
         .get();
 
-    return snap.docs.map((doc) {
-      _transferAccountIds[doc.id] = accountId;
-      final row = doc.data();
-      final fromId = row['from_member_id'] as String;
-      final toId = row['to_member_id'] as String;
-      final rawPaid = row['is_paid'];
-      final isPaid = rawPaid is bool ? rawPaid : (rawPaid == 1);
-      return SettlementTransfer(
-        id: doc.id,
-        cycleId: row['cycle_id'] as String,
-        fromMemberId: fromId,
-        toMemberId: toId,
-        fromMemberName: memberById[fromId]?.name ?? 'Unknown',
-        toMemberName: memberById[toId]?.name ?? 'Unknown',
-        amount: (row['amount'] as num).toDouble(),
-        isPaid: isPaid,
-        paidAt: row['paid_at'] != null
-            ? DateTime.parse(row['paid_at'] as String)
-            : null,
-      );
-    }).toList();
+    return snap.docs
+        .map((doc) => _mapTransferDoc(doc, accountId, memberById))
+        .toList();
   }
 
   @override
@@ -651,22 +659,38 @@ class CloudBudgetRepository implements BudgetDataSource {
     await _expensesCol(accountId).doc(expenseId).delete();
   }
 
-  /// Uploads existing V1 local SQLite accounts, members, cycles, expenses,
+  /// Uploads unmigrated local SQLite accounts, members, cycles, expenses,
   /// splits, and settlement transfers into Firebase Cloud Firestore.
   ///
   /// Local IDs are deterministically remapped per user (`UUIDv5(uid, localId)`).
   Future<int> migrateLocalToCloud(BudgetRepository localRepo) async {
+    final mapping = await migrateLocalToCloudWithMapping(localRepo);
+    return mapping.length;
+  }
+
+  /// Same as [migrateLocalToCloud], returning `{localAccountId: cloudAccountId}`
+  /// and cleaning up uploaded guest rows so SQLite stays duplicate-free.
+  Future<Map<String, String>> migrateLocalToCloudWithMapping(
+    BudgetRepository localRepo,
+  ) async {
     final uid = _uid;
-    final localAccounts = await localRepo.getAccounts();
-    if (localAccounts.isEmpty) return 0;
+    final localAccounts = await localRepo.getUnmigratedGuestAccounts();
+    if (localAccounts.isEmpty) return const {};
 
     final existingCloudIds = (await getAccounts()).map((a) => a.id).toSet();
-    var migratedCount = 0;
+    final mappedAccounts = <String, String>{};
+    final migratedLocalIds = <String>[];
 
     for (final account in localAccounts) {
       final cloudAccountId = migratedIdForUser(uid, account.id);
-      if (existingCloudIds.contains(account.id) ||
-          existingCloudIds.contains(cloudAccountId)) {
+      if (existingCloudIds.contains(account.id)) {
+        mappedAccounts[account.id] = account.id;
+        migratedLocalIds.add(account.id);
+        continue;
+      }
+      if (existingCloudIds.contains(cloudAccountId)) {
+        mappedAccounts[account.id] = cloudAccountId;
+        migratedLocalIds.add(account.id);
         continue;
       }
 
@@ -814,9 +838,154 @@ class CloudBudgetRepository implements BudgetDataSource {
         await batch.commit();
       }
 
-      migratedCount++;
+      mappedAccounts[account.id] = cloudAccountId;
+      migratedLocalIds.add(account.id);
     }
 
-    return migratedCount;
+    await localRepo.removeAccountsByIds(migratedLocalIds);
+    return mappedAccounts;
+  }
+
+  /// Replays offline edits made inside cached Cloud accounts for [uid] back to Firestore.
+  Future<void> syncPendingOpsToCloud(
+    String uid,
+    BudgetRepository localRepo,
+  ) async {
+    final ops = await localRepo.getPendingSyncOps(uid);
+    if (ops.isEmpty) return;
+
+    for (final op in ops) {
+      switch (op.opType) {
+        case 'account_update':
+          final acc = await localRepo.getAccountById(op.accountId);
+          if (acc != null) {
+            await updateAccount(acc);
+          }
+        case 'member_upsert':
+          final member = await localRepo.getMemberById(op.entityId);
+          if (member != null) {
+            await _membersCol(op.accountId).doc(member.id).set({
+              'id': member.id,
+              'account_id': op.accountId,
+              'user_id': member.userId,
+              'name': member.name,
+              'is_active': member.isActive,
+              'created_at': member.createdAt.toUtc().toIso8601String(),
+            }, SetOptions(merge: true));
+            await _syncInviteForAccountId(op.accountId);
+          }
+        case 'expense_upsert':
+          final expense = await localRepo.getExpenseById(op.entityId);
+          if (expense != null) {
+            _expenseAccountIds[expense.id] = op.accountId;
+            await _expensesCol(op.accountId).doc(expense.id).set({
+              'id': expense.id,
+              'account_id': op.accountId,
+              'cycle_id': expense.cycleId,
+              'paid_by_member_id': expense.paidByMemberId,
+              'created_by_user_id': expense.createdByUserId ?? uid,
+              'tx_type': expense.txType.key,
+              'title': expense.title,
+              'category': expense.category.key,
+              'amount': expense.amount,
+              'expense_date': expense.expenseDate.toUtc().toIso8601String(),
+              'created_at': expense.createdAt.toUtc().toIso8601String(),
+              'splits': expense.splits.map((s) => s.toMap()).toList(),
+            });
+          }
+        case 'expense_delete':
+          await _expensesCol(op.accountId).doc(op.entityId).delete();
+        case 'cycle_close':
+          final parts = op.entityId.split('|');
+          if (parts.length == 2) {
+            final closed = await localRepo.getCycleById(parts[0]);
+            final next = await localRepo.getCycleById(parts[1]);
+            final members = await localRepo.getMembers(op.accountId);
+            final memberById = {for (final m in members) m.id: m};
+            final transfers = await localRepo.getTransfersForCycle(
+              cycleId: parts[0],
+              memberById: memberById,
+            );
+            if (closed != null && next != null) {
+              final batch = _db.batch();
+              batch.set(_cyclesCol(op.accountId).doc(closed.id), {
+                'id': closed.id,
+                'account_id': op.accountId,
+                'title': closed.title,
+                'start_date': closed.startDate.toUtc().toIso8601String(),
+                'end_date': closed.endDate?.toUtc().toIso8601String(),
+                'is_settled': true,
+              });
+              for (final t in transfers) {
+                batch.set(_transfersCol(op.accountId).doc(t.id), {
+                  'id': t.id,
+                  'cycle_id': t.cycleId,
+                  'from_member_id': t.fromMemberId,
+                  'to_member_id': t.toMemberId,
+                  'amount': t.amount,
+                  'is_paid': t.isPaid,
+                  'paid_at': t.paidAt?.toUtc().toIso8601String(),
+                });
+              }
+              batch.set(_cyclesCol(op.accountId).doc(next.id), {
+                'id': next.id,
+                'account_id': op.accountId,
+                'title': next.title,
+                'start_date': next.startDate.toUtc().toIso8601String(),
+                'end_date': null,
+                'is_settled': false,
+              });
+              await batch.commit();
+            }
+          }
+        case 'transfer_paid':
+          final state = await localRepo.getTransferPaymentState(op.entityId);
+          if (state != null) {
+            await _transfersCol(op.accountId).doc(op.entityId).update({
+              'is_paid': state.isPaid,
+              'paid_at': state.paidAt?.toUtc().toIso8601String(),
+            });
+          }
+      }
+      await localRepo.deletePendingSyncOp(op.id);
+    }
+  }
+
+  /// Mirrors the current signed-in user's Cloud accounts into local SQLite so
+  /// offline fallback and post-logout offline access retain all data cleanly.
+  Future<void> mirrorToLocal(BudgetRepository localRepo) async {
+    final uid = _uid;
+    final accounts = await getAccounts();
+    final bundles = <CachedCloudAccountBundle>[];
+
+    for (final account in accounts) {
+      final members = await getMembers(account.id);
+      final memberById = {for (final m in members) m.id: m};
+      final cyclesSnap = await _cyclesCol(account.id).get();
+      final cycles = cyclesSnap.docs.map((doc) {
+        _cycleAccountIds[doc.id] = account.id;
+        return SettlementCycle.fromMap({...doc.data(), 'id': doc.id});
+      }).toList();
+
+      final expensesSnap = await _expensesCol(account.id).get();
+      final expenses = _mapExpenses(account.id, expensesSnap.docs);
+
+      final transfersSnap = await _transfersCol(account.id).get();
+      final transfers = transfersSnap.docs
+          .map((doc) => _mapTransferDoc(doc, account.id, memberById))
+          .toList();
+
+      bundles.add(
+        CachedCloudAccountBundle(
+          account: account,
+          members: members,
+          cycles: cycles,
+          expenses: expenses,
+          transfers: transfers,
+        ),
+      );
+    }
+
+    await localRepo.replaceCloudCacheForUser(uid: uid, bundles: bundles);
   }
 }

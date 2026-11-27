@@ -306,6 +306,9 @@ class AppStrings {
   String get logoutBtn => isBurmese ? 'အကောင့်ထွက်မည် (Logout)' : 'Log Out';
   String get logoutConfirm =>
       isBurmese ? 'အကောင့်မှ ထွက်လိုပါသလား?' : 'Are you sure you want to log out?';
+  String get keepOfflineOnLogout => isBurmese
+      ? 'Offline တွင် ဆက်သုံးနိုင်ရန် စာရင်းများ စက်ထဲတွင် သိမ်းထားမည်'
+      : 'Keep a local copy on this device for offline mode';
   String get cloudSyncedBadge => isBurmese ? 'Cloud Sync ချိတ်ထားသည်' : 'Cloud Synced';
   String get offlineModeBadge => isBurmese ? 'Offline Local' : 'Offline Mode';
 

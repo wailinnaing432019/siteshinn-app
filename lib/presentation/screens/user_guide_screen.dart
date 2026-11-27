@@ -47,8 +47,8 @@ class UserGuideScreen extends ConsumerWidget {
                       children: [
                         Text(
                           isMy
-                              ? 'စိုက်ရှင်း (SiteShinn) v2.2.0'
-                              : 'SiteShinn (စိုက်ရှင်း) v2.2.0',
+                              ? 'စိုက်ရှင်း (SiteShinn) v2.2.1'
+                              : 'SiteShinn (စိုက်ရှင်း) v2.2.1',
                           style: Theme.of(context)
                               .textTheme
                               .titleMedium

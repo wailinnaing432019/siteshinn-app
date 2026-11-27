@@ -924,24 +924,49 @@ class _CloudAccountCardState extends ConsumerState<_CloudAccountCard> {
   }
 
   Future<void> _confirmLogout(AppStrings strings) async {
+    var keepOfflineCopy = true;
     final confirmed = await showDialog<bool>(
       context: context,
-      builder: (ctx) => AlertDialog(
-        title: Text(strings.logoutBtn),
-        content: Text(strings.logoutConfirm),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(ctx).pop(false),
-            child: Text(strings.cancel),
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setDialogState) => AlertDialog(
+          title: Text(strings.logoutBtn),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(strings.logoutConfirm),
+              const SizedBox(height: 12),
+              CheckboxListTile(
+                value: keepOfflineCopy,
+                contentPadding: EdgeInsets.zero,
+                controlAffinity: ListTileControlAffinity.leading,
+                title: Text(
+                  strings.keepOfflineOnLogout,
+                  style: const TextStyle(fontSize: 13),
+                ),
+                onChanged: (val) {
+                  setDialogState(() => keepOfflineCopy = val ?? true);
+                },
+              ),
+            ],
           ),
-          FilledButton(
-            onPressed: () => Navigator.of(ctx).pop(true),
-            child: Text(strings.logoutBtn),
-          ),
-        ],
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(ctx).pop(false),
+              child: Text(strings.cancel),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.of(ctx).pop(true),
+              child: Text(strings.logoutBtn),
+            ),
+          ],
+        ),
       ),
     );
     if (confirmed != true) return;
+    await ref
+        .read(dashboardProvider.notifier)
+        .prepareForLogout(keepOfflineCopy: keepOfflineCopy);
     await AuthService.instance.signOut();
     await ref.read(appSettingsProvider.notifier).setOfflineGuestMode(false);
   }
@@ -1257,7 +1282,7 @@ class _AppBrandAndUpdateCardState
                 'SiteShinn • စိုက်ရှင်း',
                 style: TextStyle(fontWeight: FontWeight.bold),
               ),
-              subtitle: const Text('v2.2.0 • Wai Linn Naing'),
+              subtitle: const Text('v2.2.1 • Wai Linn Naing'),
             ),
             if (AppEnv.isCloudConfigured)
               Padding(

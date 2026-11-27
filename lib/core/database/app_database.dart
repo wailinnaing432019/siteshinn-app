@@ -18,7 +18,7 @@ class AppDatabase {
     final dbPath = p.join(dbDir, 'siteshinn.db');
     return openDatabase(
       dbPath,
-      version: 3,
+      version: 4,
       onConfigure: (db) async {
         await db.execute('PRAGMA foreign_keys = ON');
       },
@@ -32,6 +32,7 @@ class AppDatabase {
       CREATE TABLE accounts (
         id TEXT PRIMARY KEY,
         owner_id TEXT,
+        cached_for_uid TEXT,
         name TEXT NOT NULL,
         currency_code TEXT NOT NULL DEFAULT 'MMK',
         account_type TEXT NOT NULL DEFAULT 'group',
@@ -110,6 +111,17 @@ class AppDatabase {
       )
     ''');
 
+    await db.execute('''
+      CREATE TABLE pending_sync_ops (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        uid_scope TEXT NOT NULL,
+        account_id TEXT NOT NULL,
+        op_type TEXT NOT NULL,
+        entity_id TEXT NOT NULL,
+        created_at TEXT NOT NULL
+      )
+    ''');
+
     await _createIndexes(db);
   }
 
@@ -176,6 +188,24 @@ class AppDatabase {
         await txn.execute(
           'ALTER TABLE settlement_transfers ADD COLUMN paid_at TEXT',
         );
+      });
+    }
+
+    if (oldVersion < 4) {
+      await db.transaction((txn) async {
+        await txn.execute(
+          'ALTER TABLE accounts ADD COLUMN cached_for_uid TEXT',
+        );
+        await txn.execute('''
+          CREATE TABLE IF NOT EXISTS pending_sync_ops (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            uid_scope TEXT NOT NULL,
+            account_id TEXT NOT NULL,
+            op_type TEXT NOT NULL,
+            entity_id TEXT NOT NULL,
+            created_at TEXT NOT NULL
+          )
+        ''');
       });
     }
   }
