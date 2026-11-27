@@ -620,6 +620,19 @@ void main() {
       ).hasUpdate,
       isTrue,
     );
+    expect(
+      AppUpdateService.instance.apkFileNameFor(
+        const AppUpdateInfo(
+          currentVersion: '2.1.0',
+          currentBuild: 2004,
+          latestVersion: '2.1.1',
+          latestBuild: 5005,
+          apkUrl: 'https://example.com/app.apk',
+          releaseNotes: '',
+        ),
+      ),
+      'siteshinn_v2.1.1_b5005.apk',
+    );
   });
 
   testWidgets('UserGuideScreen renders bilingual sections and switches language',

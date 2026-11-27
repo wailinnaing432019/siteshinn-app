@@ -148,13 +148,74 @@ class AppUpdateService {
     }
   }
 
+  Future<bool> canRequestPackageInstalls() async {
+    if (!Platform.isAndroid) return true;
+    try {
+      return await _channel.invokeMethod<bool>('canRequestPackageInstalls') ??
+          true;
+    } catch (_) {
+      return true;
+    }
+  }
+
+  Future<bool> openUnknownAppsSettings() async {
+    if (!Platform.isAndroid) return false;
+    try {
+      return await _channel.invokeMethod<bool>('openUnknownAppsSettings') ??
+          false;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  String apkFileNameFor(AppUpdateInfo info) {
+    final safeVer = info.latestVersion.replaceAll(RegExp(r'[^\w\.\-]+'), '_');
+    return 'siteshinn_v${safeVer}_b${info.latestBuild}.apk';
+  }
+
+  Future<File> cachedApkFileFor(AppUpdateInfo info) async {
+    final tempDir = await getTemporaryDirectory();
+    return File(p.join(tempDir.path, apkFileNameFor(info)));
+  }
+
+  Future<void> _cleanupStaleApks(Directory dir, String keepFileName) async {
+    try {
+      await for (final entity in dir.list()) {
+        if (entity is! File) continue;
+        final name = p.basename(entity.path);
+        if (name.startsWith('siteshinn_v') &&
+            (name.endsWith('.apk') || name.endsWith('.apk.part')) &&
+            name != keepFileName) {
+          try {
+            await entity.delete();
+          } catch (_) {}
+        }
+      }
+    } catch (_) {}
+  }
+
   Future<String> downloadAndInstallApk(
     AppUpdateInfo info, {
     required void Function(double? progress, int received, int total)
         onProgress,
   }) async {
+    final apkFile = await cachedApkFileFor(info);
+    if (await apkFile.exists()) {
+      final cachedSize = await apkFile.length();
+      if (cachedSize > 0) {
+        onProgress(1.0, cachedSize, cachedSize);
+        final status = await _channel.invokeMethod<String>('installApk', {
+          'path': apkFile.path,
+        });
+        return status ?? 'error';
+      }
+    }
+
+    await _cleanupStaleApks(apkFile.parent, p.basename(apkFile.path));
+
     final uri = Uri.parse(info.apkUrl);
     final client = HttpClient()..connectionTimeout = const Duration(seconds: 15);
+    final partFile = File('${apkFile.path}.part');
     try {
       final request = await client.getUrl(uri);
       request.followRedirects = true;
@@ -167,35 +228,48 @@ class AppUpdateService {
         );
       }
 
-      final tempDir = await getTemporaryDirectory();
-      final safeVer =
-          info.latestVersion.replaceAll(RegExp(r'[^\w\.\-]+'), '_');
-      final apkFile = File(p.join(tempDir.path, 'siteshinn_v$safeVer.apk'));
-      final sink = apkFile.openWrite();
+      if (await partFile.exists()) {
+        await partFile.delete();
+      }
+      final sink = partFile.openWrite();
 
       final totalBytes = response.contentLength;
       var receivedBytes = 0;
 
-      await for (final chunk in response) {
-        sink.add(chunk);
-        receivedBytes += chunk.length;
-        final progress = totalBytes > 0
-            ? (receivedBytes / totalBytes).clamp(0.0, 1.0)
-            : null;
-        onProgress(progress, receivedBytes, totalBytes);
+      try {
+        await for (final chunk in response) {
+          sink.add(chunk);
+          receivedBytes += chunk.length;
+          final progress = totalBytes > 0
+              ? (receivedBytes / totalBytes).clamp(0.0, 1.0)
+              : null;
+          onProgress(progress, receivedBytes, totalBytes);
+        }
+
+        await sink.flush();
+      } finally {
+        await sink.close();
       }
 
-      await sink.flush();
-      await sink.close();
-
-      if (await apkFile.length() == 0) {
-        throw StateError('Downloaded APK file is empty.');
+      if (receivedBytes <= 0 ||
+          (totalBytes > 0 && receivedBytes != totalBytes)) {
+        throw StateError('Incomplete APK download.');
       }
+
+      if (await apkFile.exists()) {
+        await apkFile.delete();
+      }
+      await partFile.rename(apkFile.path);
 
       final status = await _channel.invokeMethod<String>('installApk', {
         'path': apkFile.path,
       });
       return status ?? 'error';
+    } catch (_) {
+      try {
+        if (await partFile.exists()) await partFile.delete();
+      } catch (_) {}
+      rethrow;
     } finally {
       client.close(force: true);
     }

@@ -43,19 +43,66 @@ class AppUpdateDialog extends StatefulWidget {
   State<AppUpdateDialog> createState() => _AppUpdateDialogState();
 }
 
-class _AppUpdateDialogState extends State<AppUpdateDialog> {
+class _AppUpdateDialogState extends State<AppUpdateDialog>
+    with WidgetsBindingObserver {
   bool _isDownloading = false;
+  bool _waitingForInstallPermission = false;
   double? _progress;
   int _receivedBytes = 0;
   int _totalBytes = -1;
   String? _statusMessage;
 
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed &&
+        _waitingForInstallPermission &&
+        !_isDownloading) {
+      _resumeAfterPermission();
+    }
+  }
+
+  Future<void> _resumeAfterPermission() async {
+    final granted = await AppUpdateService.instance.canRequestPackageInstalls();
+    if (!mounted || !granted) return;
+    setState(() {
+      _waitingForInstallPermission = false;
+      _statusMessage = null;
+    });
+    await _startUpdate();
+  }
+
   String _formatMb(int bytes) => (bytes / (1024 * 1024)).toStringAsFixed(1);
 
   Future<void> _startUpdate() async {
     final strings = widget.strings;
+    final hasPermission =
+        await AppUpdateService.instance.canRequestPackageInstalls();
+    if (!mounted) return;
+    if (!hasPermission) {
+      setState(() {
+        _isDownloading = false;
+        _waitingForInstallPermission = true;
+        _statusMessage = strings.allowInstallUnknownApps;
+      });
+      await AppUpdateService.instance.openUnknownAppsSettings();
+      return;
+    }
+
     setState(() {
       _isDownloading = true;
+      _waitingForInstallPermission = false;
       _progress = null;
       _receivedBytes = 0;
       _totalBytes = -1;
@@ -79,6 +126,7 @@ class _AppUpdateDialogState extends State<AppUpdateDialog> {
       if (result == 'needs_permission') {
         setState(() {
           _isDownloading = false;
+          _waitingForInstallPermission = true;
           _statusMessage = strings.allowInstallUnknownApps;
         });
       } else if (result == 'launched') {

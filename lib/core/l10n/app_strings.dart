@@ -378,8 +378,8 @@ class AppStrings {
   String get laterBtn => isBurmese ? 'နောက်မှ' : 'Later';
   String get downloadingUpdate => isBurmese ? 'APK Download ဆွဲနေသည်...' : 'Downloading APK...';
   String get allowInstallUnknownApps => isBurmese
-      ? 'App တင်ခွင့်ပြုရန် "Allow from this source" ကို ဖွင့်ပေးပြီးနောက် Update တင်မည် ကို ထပ်နှိပ်ပါ။'
-      : 'Enable "Allow from this source" in Settings, then tap Update Now again.';
+      ? 'App တင်ခွင့်ပြုရန် "Allow from this source" ကို ဖွင့်ပေးပြီး App ထဲသို့ ပြန်ဝင်လာပါက အလိုအလျောက် ဆက်လုပ်ပေးပါမည်။'
+      : 'Enable "Allow from this source" in Settings, then return here to continue automatically.';
   String get updateFailed => isBurmese
       ? 'Update Download မအောင်မြင်ပါ။ အင်တာနက်စစ်ဆေးပြီး ထပ်စမ်းကြည့်ပါ။'
       : 'Update download failed. Please check your connection and try again.';

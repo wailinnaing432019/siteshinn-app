@@ -125,6 +125,12 @@ class MainActivity : FlutterActivity() {
                     "getAppVersionInfo" -> {
                         result.success(getAppVersionInfo())
                     }
+                    "canRequestPackageInstalls" -> {
+                        result.success(canInstallUnknownApps())
+                    }
+                    "openUnknownAppsSettings" -> {
+                        result.success(openUnknownAppsSettings())
+                    }
                     "installApk" -> {
                         val path = call.argument<String>("path")
                         if (path.isNullOrBlank()) {
@@ -357,23 +363,33 @@ class MainActivity : FlutterActivity() {
         }
     }
 
+    private fun canInstallUnknownApps(): Boolean {
+        return Build.VERSION.SDK_INT < Build.VERSION_CODES.O ||
+            packageManager.canRequestPackageInstalls()
+    }
+
+    private fun openUnknownAppsSettings(): Boolean {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return true
+        return try {
+            val permIntent = Intent(
+                Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES,
+                Uri.parse("package:$packageName")
+            ).apply {
+                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            }
+            startActivity(permIntent)
+            true
+        } catch (_: Exception) {
+            false
+        }
+    }
+
     private fun installApk(path: String): String {
         val file = File(path)
         if (!file.exists()) return "file_missing"
 
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O &&
-            !packageManager.canRequestPackageInstalls()
-        ) {
-            try {
-                val permIntent = Intent(
-                    Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES,
-                    Uri.parse("package:$packageName")
-                ).apply {
-                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                }
-                startActivity(permIntent)
-            } catch (_: Exception) {
-            }
+        if (!canInstallUnknownApps()) {
+            openUnknownAppsSettings()
             return "needs_permission"
         }
 
