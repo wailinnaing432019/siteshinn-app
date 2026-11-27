@@ -5,6 +5,8 @@ import '../../core/utils/formatters.dart';
 import '../../data/models/settlement_cycle.dart';
 import '../../data/models/settlement_summary.dart';
 import '../../providers/app_providers.dart';
+import '../../services/analytics_service.dart';
+import '../widgets/account_charts.dart';
 import 'settlement_screen.dart';
 
 class HistoryScreen extends ConsumerWidget {
@@ -42,42 +44,66 @@ class HistoryScreen extends ConsumerWidget {
       );
     }
 
-    return ListView.builder(
+    final activeAccount = dashboard?.activeAccount;
+    final currencyCode = activeAccount?.currencyCode ?? 'MMK';
+    final cycleKey = cycles.map((c) => c.id).join(',');
+
+    return ListView(
       padding: const EdgeInsets.all(16),
-      itemCount: cycles.length,
-      itemBuilder: (context, index) {
-        final cycle = cycles[index];
-        return Card(
-          margin: const EdgeInsets.only(bottom: 10),
-          child: ListTile(
-            leading: CircleAvatar(
-              backgroundColor: Theme.of(context).colorScheme.primaryContainer,
-              child: Icon(
-                Icons.verified_rounded,
-                color: Theme.of(context).colorScheme.onPrimaryContainer,
-              ),
-            ),
-            title: Text(
-              strings.displayCycleTitle(cycle),
-              style: const TextStyle(fontWeight: FontWeight.w600),
-            ),
-            subtitle: Text(
-              AppFormatters.formatDateRange(cycle.startDate, cycle.endDate),
-            ),
-            trailing: Chip(
-              label: Text(strings.settledBadge, style: const TextStyle(fontSize: 11)),
-              visualDensity: VisualDensity.compact,
-            ),
-            onTap: () {
-              Navigator.of(context).push(
-                MaterialPageRoute(
-                  builder: (_) => CycleDetailScreen(cycle: cycle),
-                ),
+      children: [
+        if (cycles.isNotEmpty)
+          FutureBuilder<List<CycleTrendPoint>>(
+            key: ValueKey(cycleKey),
+            future:
+                ref.read(dashboardProvider.notifier).loadSettledCycleTrends(),
+            builder: (context, snapshot) {
+              if (!snapshot.hasData || snapshot.data!.isEmpty) {
+                return const SizedBox.shrink();
+              }
+              return CycleTrendChartCard(
+                points: snapshot.data!,
+                currencyCode: currencyCode,
+                strings: strings,
               );
             },
           ),
-        );
-      },
+        ...cycles.map((cycle) {
+          return Card(
+            margin: const EdgeInsets.only(bottom: 10),
+            child: ListTile(
+              leading: CircleAvatar(
+                backgroundColor:
+                    Theme.of(context).colorScheme.primaryContainer,
+                child: Icon(
+                  Icons.verified_rounded,
+                  color: Theme.of(context).colorScheme.onPrimaryContainer,
+                ),
+              ),
+              title: Text(
+                strings.displayCycleTitle(cycle),
+                style: const TextStyle(fontWeight: FontWeight.w600),
+              ),
+              subtitle: Text(
+                AppFormatters.formatDateRange(cycle.startDate, cycle.endDate),
+              ),
+              trailing: Chip(
+                label: Text(
+                  strings.settledBadge,
+                  style: const TextStyle(fontSize: 11),
+                ),
+                visualDensity: VisualDensity.compact,
+              ),
+              onTap: () {
+                Navigator.of(context).push(
+                  MaterialPageRoute(
+                    builder: (_) => CycleDetailScreen(cycle: cycle),
+                  ),
+                );
+              },
+            ),
+          );
+        }),
+      ],
     );
   }
 }

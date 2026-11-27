@@ -9,9 +9,11 @@ import '../../data/models/account.dart';
 import '../../data/models/member.dart';
 import '../../data/models/settlement_summary.dart';
 import '../../providers/app_providers.dart';
+import '../../services/analytics_service.dart';
 import '../../services/excel_export_service.dart';
 import '../../services/export_file_opener.dart';
 import '../../services/pdf_export_service.dart';
+import '../widgets/account_charts.dart';
 import '../widgets/export_sheet.dart';
 
 class SettlementScreen extends ConsumerWidget {
@@ -81,6 +83,7 @@ class CycleReportView extends StatefulWidget {
 
 class _CycleReportViewState extends State<CycleReportView> {
   bool _isExporting = false;
+  bool _showCharts = false;
   final Set<int> _expandedTransferIndices = <int>{};
 
   Future<void> _runExportSheet({
@@ -260,9 +263,51 @@ class _CycleReportViewState extends State<CycleReportView> {
             ),
           ],
         ),
-        const SizedBox(height: 20),
+        const SizedBox(height: 16),
 
-        // Who Pays Whom
+        SegmentedButton<bool>(
+          segments: [
+            ButtonSegment<bool>(
+              value: false,
+              icon: const Icon(Icons.balance_outlined, size: 18),
+              label: Text(strings.settlementTabLabel),
+            ),
+            ButtonSegment<bool>(
+              value: true,
+              icon: const Icon(Icons.bar_chart_rounded, size: 18),
+              label: Text(strings.chartsTabLabel),
+            ),
+          ],
+          selected: {_showCharts},
+          onSelectionChanged: (sel) {
+            setState(() => _showCharts = sel.first);
+          },
+        ),
+        const SizedBox(height: 16),
+
+        if (_showCharts) ...[
+          MemberPaidVsShareBarCard(
+            balances: report.balances,
+            currencyCode: currency,
+            strings: strings,
+          ),
+          const SizedBox(height: 12),
+          CategoryDonutChartCard(
+            title: strings.categoryBreakdown,
+            slices: AnalyticsService.computeCategoryBreakdown(report.expenses),
+            totalAmount: report.totalExpense,
+            currencyCode: currency,
+            strings: strings,
+          ),
+          const SizedBox(height: 12),
+          DailyTrendLineCard(
+            title: strings.dailySpendingTrendTitle,
+            points: AnalyticsService.computeDailyTrend(report.expenses),
+            currencyCode: currency,
+            strings: strings,
+          ),
+        ] else ...[
+          // Who Pays Whom
         Text(
           strings.whoPaysWhom,
           style: Theme.of(context)
@@ -574,6 +619,7 @@ class _CycleReportViewState extends State<CycleReportView> {
             icon: const Icon(Icons.task_alt),
             label: Text(strings.closeCycleBtn),
           ),
+        ],
         ],
       ],
     );

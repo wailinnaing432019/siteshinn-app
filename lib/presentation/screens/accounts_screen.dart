@@ -1255,7 +1255,7 @@ class _AppBrandAndUpdateCardState
                 'SiteShinn • စိုက်ရှင်း',
                 style: TextStyle(fontWeight: FontWeight.bold),
               ),
-              subtitle: const Text('v2.0.1 • Wai Linn Naing'),
+              subtitle: const Text('v2.1.0 • Wai Linn Naing'),
             ),
             if (AppEnv.isCloudConfigured)
               Padding(

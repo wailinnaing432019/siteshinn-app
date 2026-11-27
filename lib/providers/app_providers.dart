@@ -20,6 +20,7 @@ import '../data/models/settlement_summary.dart';
 import '../data/repositories/budget_data_source.dart';
 import '../data/repositories/budget_repository.dart';
 import '../data/repositories/cloud_budget_repository.dart';
+import '../services/analytics_service.dart';
 import '../services/auth_service.dart';
 import '../services/reminder_service.dart';
 import '../services/settlement_service.dart';
@@ -777,6 +778,24 @@ class DashboardNotifier extends AsyncNotifier<DashboardState> {
     final count = await _cloudRepo.migrateLocalToCloud(_localRepo);
     await refresh();
     return count;
+  }
+
+  Future<List<CycleTrendPoint>> loadSettledCycleTrends({
+    int limit = 8,
+  }) async {
+    final cycles = state.value?.settledCycles ?? const [];
+    if (cycles.isEmpty) return const [];
+
+    final recentChronological = cycles.take(limit).toList().reversed;
+    final points = <CycleTrendPoint>[];
+    for (final cycle in recentChronological) {
+      final expenses = await _repo.getExpensesForCycle(cycle.id);
+      final total = expenses
+          .where((e) => !e.isIncome)
+          .fold<double>(0, (acc, e) => acc + e.amount);
+      points.add(CycleTrendPoint(cycle: cycle, totalExpense: total));
+    }
+    return points;
   }
 }
 

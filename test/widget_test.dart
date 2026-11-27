@@ -6,8 +6,10 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:site_shinn/app.dart';
 import 'package:site_shinn/presentation/screens/user_guide_screen.dart';
+import 'package:site_shinn/presentation/widgets/account_charts.dart';
 import 'package:site_shinn/presentation/widgets/app_update_dialog.dart';
 import 'package:site_shinn/presentation/widgets/export_sheet.dart';
+import 'package:site_shinn/services/analytics_service.dart';
 import 'package:site_shinn/services/app_update_service.dart';
 import 'package:site_shinn/services/export_file_opener.dart';
 import 'package:site_shinn/services/pdf_export_service.dart';
@@ -642,6 +644,160 @@ void main() {
     expect(find.text('Improved PDF export'), findsOneWidget);
     expect(find.text('Update Now'), findsOneWidget);
     expect(find.text('Later'), findsOneWidget);
+  });
+
+  test('AnalyticsService computes category breakdown and daily trends', () {
+    final d1 = DateTime(2026, 11, 20);
+    final d2 = DateTime(2026, 11, 21);
+    final items = [
+      Expense(
+        id: 'e1',
+        accountId: 'acc1',
+        cycleId: 'c1',
+        txType: TransactionType.income,
+        title: 'Salary',
+        category: ExpenseCategory.salary,
+        amount: 500000,
+        expenseDate: d1,
+        createdAt: d1,
+      ),
+      Expense(
+        id: 'e2',
+        accountId: 'acc1',
+        cycleId: 'c1',
+        title: 'Dinner',
+        category: ExpenseCategory.food,
+        amount: 30000,
+        expenseDate: d1,
+        createdAt: d1,
+      ),
+      Expense(
+        id: 'e3',
+        accountId: 'acc1',
+        cycleId: 'c1',
+        title: 'Bus',
+        category: ExpenseCategory.transport,
+        amount: 10000,
+        expenseDate: d2,
+        createdAt: d2,
+      ),
+    ];
+
+    final slices = AnalyticsService.computeCategoryBreakdown(items);
+    expect(slices.length, 2);
+    expect(slices.first.category, ExpenseCategory.food);
+    expect(slices.first.ratio, closeTo(0.75, 0.001));
+    expect(slices.last.category, ExpenseCategory.transport);
+
+    final daily = AnalyticsService.computeDailyTrend(items);
+    expect(daily.length, 2);
+    expect(daily.first.income, 500000);
+    expect(daily.first.expense, 30000);
+    expect(daily.last.expense, 10000);
+  });
+
+  testWidgets(
+      'CycleReportView switches to Charts view and CycleTrendChartCard renders',
+      (tester) async {
+    final now = DateTime(2026, 11, 27);
+    final account = Account(
+      id: 'acc1',
+      name: 'Room 5',
+      currencyCode: 'MMK',
+      createdAt: now,
+    );
+    final m1 = Member(id: 'm1', accountId: 'acc1', name: 'Aung', createdAt: now);
+    final m2 = Member(id: 'm2', accountId: 'acc1', name: 'Kyaw', createdAt: now);
+    final cycle = SettlementCycle(
+      id: 'c1',
+      accountId: 'acc1',
+      title: 'Week 1',
+      startDate: now,
+    );
+    final expenses = [
+      Expense(
+        id: 'e1',
+        accountId: 'acc1',
+        cycleId: 'c1',
+        paidByMemberId: 'm1',
+        title: 'Groceries',
+        category: ExpenseCategory.food,
+        amount: 10000,
+        expenseDate: now,
+        createdAt: now,
+        splits: SettlementService.buildEqualSplits(
+          expenseId: 'e1',
+          amount: 10000,
+          participantIds: ['m1', 'm2'],
+          currencyCode: 'MMK',
+        ),
+      ),
+    ];
+    final report = SettlementService.calculateReport(
+      cycle: cycle,
+      allMembers: [m1, m2],
+      expenses: expenses,
+      currencyCode: 'MMK',
+    );
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: CycleReportView(
+            account: account,
+            report: report,
+            allMembers: [m1, m2],
+            strings: const AppStrings(AppLanguage.en),
+            isOpenCycle: true,
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Charts'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Paid vs Fair Share'), findsOneWidget);
+    final scrollable = find.byType(Scrollable).first;
+    await tester.scrollUntilVisible(
+      find.text('Spending by Category'),
+      250.0,
+      scrollable: scrollable,
+    );
+    expect(find.text('Spending by Category'), findsOneWidget);
+    await tester.scrollUntilVisible(
+      find.text('Daily Spending Trend'),
+      250.0,
+      scrollable: scrollable,
+    );
+    expect(find.text('Daily Spending Trend'), findsOneWidget);
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: ListView(
+            children: [
+              const IncomeExpenseBarCard(
+                income: 500000,
+                expense: 120000,
+                currencyCode: 'MMK',
+                strings: AppStrings(AppLanguage.en),
+              ),
+              CycleTrendChartCard(
+                points: [CycleTrendPoint(cycle: cycle, totalExpense: 10000)],
+                currencyCode: 'MMK',
+                strings: const AppStrings(AppLanguage.en),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Income vs Expense'), findsOneWidget);
+    expect(find.text('Spending Across Cycles'), findsOneWidget);
   });
 }
 

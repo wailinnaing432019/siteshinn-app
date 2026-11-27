@@ -9,8 +9,10 @@ import '../../data/models/account.dart';
 import '../../data/models/expense.dart';
 import '../../data/models/personal_summary.dart';
 import '../../providers/app_providers.dart';
+import '../../services/analytics_service.dart';
 import '../../services/excel_export_service.dart';
 import '../../services/pdf_export_service.dart';
+import '../widgets/account_charts.dart';
 import '../widgets/export_sheet.dart';
 import 'add_expense_screen.dart';
 
@@ -600,16 +602,12 @@ class _PersonalSummaryTabState extends ConsumerState<PersonalSummaryTab> {
       endDate: range?.end,
     );
     final periodLabel = _formatPeriodLabel(range, strings);
-
-    final expenseByCategory = <ExpenseCategory, double>{};
-    for (final tx in summary.filteredTransactions) {
-      if (tx.isExpense) {
-        expenseByCategory[tx.category] =
-            (expenseByCategory[tx.category] ?? 0) + tx.amount;
-      }
-    }
-    final sortedCategories = expenseByCategory.entries.toList()
-      ..sort((a, b) => b.value.compareTo(a.value));
+    final categorySlices = AnalyticsService.computeCategoryBreakdown(
+      summary.filteredTransactions,
+    );
+    final trendPoints = AnalyticsService.computeDailyTrend(
+      summary.filteredTransactions,
+    );
 
     return ListView(
       padding: const EdgeInsets.fromLTRB(16, 12, 16, 32),
@@ -733,53 +731,29 @@ class _PersonalSummaryTabState extends ConsumerState<PersonalSummaryTab> {
           ],
         ),
 
-        if (sortedCategories.isNotEmpty) ...[
-          const SizedBox(height: 20),
-          Text(
-            strings.categoryBreakdown,
-            style: Theme.of(context)
-                .textTheme
-                .titleMedium
-                ?.copyWith(fontWeight: FontWeight.bold),
-          ),
-          const SizedBox(height: 8),
-          ...sortedCategories.map((entry) {
-            final ratio = summary.periodExpense > 0
-                ? (entry.value / summary.periodExpense).clamp(0.0, 1.0)
-                : 0.0;
-            return Card(
-              margin: const EdgeInsets.only(bottom: 8),
-              child: Padding(
-                padding: const EdgeInsets.all(14),
-                child: Column(
-                  children: [
-                    Row(
-                      children: [
-                        Icon(iconForExpenseCategory(entry.key), size: 20),
-                        const SizedBox(width: 10),
-                        Expanded(
-                          child: Text(
-                            strings.categoryName(entry.key),
-                            style: const TextStyle(fontWeight: FontWeight.w600),
-                          ),
-                        ),
-                        Text(
-                          AppFormatters.formatAmount(entry.value, currency),
-                          style: const TextStyle(fontWeight: FontWeight.bold),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 8),
-                    LinearProgressIndicator(
-                      value: ratio,
-                      borderRadius: BorderRadius.circular(4),
-                    ),
-                  ],
-                ),
-              ),
-            );
-          }),
-        ],
+        const SizedBox(height: 16),
+        IncomeExpenseBarCard(
+          income: summary.periodIncome,
+          expense: summary.periodExpense,
+          currencyCode: currency,
+          strings: strings,
+        ),
+        const SizedBox(height: 12),
+        DailyTrendLineCard(
+          title: strings.dailySpendingTrendTitle,
+          points: trendPoints,
+          currencyCode: currency,
+          showIncome: true,
+          strings: strings,
+        ),
+        const SizedBox(height: 12),
+        CategoryDonutChartCard(
+          title: strings.categoryBreakdown,
+          slices: categorySlices,
+          totalAmount: summary.periodExpense,
+          currencyCode: currency,
+          strings: strings,
+        ),
       ],
     );
   }

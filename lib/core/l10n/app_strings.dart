@@ -383,4 +383,21 @@ class AppStrings {
   String get updateFailed => isBurmese
       ? 'Update Download မအောင်မြင်ပါ။ အင်တာနက်စစ်ဆေးပြီး ထပ်စမ်းကြည့်ပါ။'
       : 'Update download failed. Please check your connection and try again.';
+
+  // Analytics & Charts
+  String get settlementTabLabel => isBurmese ? 'ရှင်းတမ်း' : 'Settlement';
+  String get chartsTabLabel => isBurmese ? 'ဂရပ်များ' : 'Charts';
+  String get paidVsShareChartTitle =>
+      isBurmese ? 'စိုက်ငွေ နှင့် ဝေစု နှိုင်းယှဉ်ချက်' : 'Paid vs Fair Share';
+  String get dailySpendingTrendTitle =>
+      isBurmese ? 'နေ့စဉ် အသုံးစရိတ် လမ်းကြောင်း' : 'Daily Spending Trend';
+  String get incomeVsExpenseTitle =>
+      isBurmese ? 'ဝင်ငွေ နှင့် ထွက်ငွေ' : 'Income vs Expense';
+  String get cycleTrendTitle =>
+      isBurmese ? 'Cycle အလိုက် ကုန်ကျစရိတ်' : 'Spending Across Cycles';
+  String get noChartData =>
+      isBurmese ? 'ဂရပ်ပြရန် စာရင်းမရှိသေးပါ။' : 'Not enough data to plot yet.';
+  String get tapSliceHint => isBurmese
+      ? 'အသေးစိတ်ကြည့်ရန် ဂရပ်အပိုင်း/တိုင်များကို ထိကြည့်ပါ'
+      : 'Tap chart bars or slices for details';
 }
