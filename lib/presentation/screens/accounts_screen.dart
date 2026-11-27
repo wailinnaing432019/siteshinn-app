@@ -1,16 +1,26 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:share_plus/share_plus.dart';
 
+import '../../core/config/app_env.dart';
 import '../../core/l10n/app_strings.dart';
+import '../../core/utils/error_formatter.dart';
 import '../../core/utils/formatters.dart';
 import '../../data/models/account.dart';
 import '../../data/models/member.dart';
 import '../../providers/app_providers.dart';
+import '../../services/app_update_service.dart';
+import '../../services/auth_service.dart';
 import '../../services/reminder_service.dart';
 import '../widgets/account_setup_form.dart';
+import '../widgets/app_update_dialog.dart';
+import 'auth_screen.dart';
+import 'join_group_screen.dart';
 import 'personal_ledger_view.dart';
+import 'user_guide_screen.dart';
 
 class AccountsScreen extends ConsumerWidget {
   const AccountsScreen({super.key});
@@ -20,33 +30,65 @@ class AccountsScreen extends ConsumerWidget {
     final strings = ref.watch(appStringsProvider);
     final settings = ref.watch(appSettingsProvider);
     final dashboard = ref.watch(dashboardProvider).value;
+    final authUser = ref.watch(authUserProvider).value;
+    final currentUserId = authUser?.uid ?? AuthService.instance.currentUser?.uid;
 
     final accounts = dashboard?.accounts ?? [];
     final activeAccount = dashboard?.activeAccount;
     final members = dashboard?.members ?? [];
+    final isCloudMode = dashboard?.isCloudMode ?? false;
 
     return ListView(
       padding: const EdgeInsets.fromLTRB(16, 12, 16, 32),
       children: [
+        if (AppEnv.isCloudConfigured) ...[
+          const _CloudAccountCard(),
+          const SizedBox(height: 16),
+        ],
+
         // Accounts List & Switcher
+        Text(
+          strings.switchAccount,
+          style: Theme.of(context).textTheme.titleMedium
+              ?.copyWith(fontWeight: FontWeight.bold),
+        ),
+        const SizedBox(height: 10),
         Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
-            Text(
-              strings.switchAccount,
-              style: Theme.of(context).textTheme.titleMedium
-                  ?.copyWith(fontWeight: FontWeight.bold),
-            ),
-            FilledButton.tonalIcon(
-              onPressed: () {
-                Navigator.of(context).push(
-                  MaterialPageRoute(
-                    builder: (_) => const CreateAccountScreen(),
+            if (isCloudMode) ...[
+              Expanded(
+                child: OutlinedButton.icon(
+                  onPressed: () {
+                    Navigator.of(context).push(
+                      MaterialPageRoute(
+                        builder: (_) => const JoinGroupScreen(),
+                      ),
+                    );
+                  },
+                  icon: const Icon(Icons.group_add_outlined, size: 18),
+                  label: Text(
+                    strings.joinGroupBtn,
+                    overflow: TextOverflow.ellipsis,
                   ),
-                );
-              },
-              icon: const Icon(Icons.add, size: 18),
-              label: Text(strings.createAccount),
+                ),
+              ),
+              const SizedBox(width: 8),
+            ],
+            Expanded(
+              child: FilledButton.tonalIcon(
+                onPressed: () {
+                  Navigator.of(context).push(
+                    MaterialPageRoute(
+                      builder: (_) => const CreateAccountScreen(),
+                    ),
+                  );
+                },
+                icon: const Icon(Icons.add, size: 18),
+                label: Text(
+                  strings.createAccount,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
             ),
           ],
         ),
@@ -115,6 +157,60 @@ class AccountsScreen extends ConsumerWidget {
           ),
           const SizedBox(height: 20),
         ] else ...[
+          if (isCloudMode &&
+              activeAccount != null &&
+              activeAccount.inviteCode != null &&
+              activeAccount.inviteCode!.isNotEmpty) ...[
+            Card(
+              color: Theme.of(context).colorScheme.secondaryContainer
+                  .withValues(alpha: 0.45),
+              child: ListTile(
+                leading: const Icon(Icons.vpn_key_outlined),
+                title: Text(strings.shareInviteLabel),
+                subtitle: SelectableText(
+                  activeAccount.inviteCode!,
+                  style: const TextStyle(
+                    fontWeight: FontWeight.bold,
+                    letterSpacing: 2.0,
+                    fontSize: 16,
+                  ),
+                ),
+                trailing: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    IconButton(
+                      tooltip: 'Copy',
+                      icon: const Icon(Icons.copy_rounded),
+                      onPressed: () async {
+                        await Clipboard.setData(
+                          ClipboardData(text: activeAccount.inviteCode!),
+                        );
+                        if (context.mounted) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(content: Text(strings.inviteCodeCopied)),
+                          );
+                        }
+                      },
+                    ),
+                    IconButton(
+                      tooltip: 'Share',
+                      icon: const Icon(Icons.share_outlined),
+                      onPressed: () {
+                        SharePlus.instance.share(
+                          ShareParams(
+                            text:
+                                '${activeAccount.name} (${strings.inviteCodeLabel}): ${activeAccount.inviteCode!}',
+                          ),
+                        );
+                      },
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            const SizedBox(height: 16),
+          ],
+
           // Members Section
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -133,26 +229,61 @@ class AccountsScreen extends ConsumerWidget {
           ),
           const SizedBox(height: 6),
           ...members.map((member) {
+            final isYou =
+                currentUserId != null && member.userId == currentUserId;
             return Card(
               margin: const EdgeInsets.only(bottom: 8),
-              child: ListTile(
-                leading: CircleAvatar(
-                  backgroundColor: member.isActive
-                      ? Theme.of(context).colorScheme.primaryContainer
-                      : Theme.of(context).colorScheme.surfaceContainerHighest,
-                  child: Text(
-                    member.name.isNotEmpty ? member.name[0].toUpperCase() : '?',
+              child: Tooltip(
+                message: member.name,
+                child: ListTile(
+                  leading: CircleAvatar(
+                    backgroundColor: member.isActive
+                        ? Theme.of(context).colorScheme.primaryContainer
+                        : Theme.of(context).colorScheme.surfaceContainerHighest,
+                    child: Text(
+                      member.name.isNotEmpty
+                          ? member.name[0].toUpperCase()
+                          : '?',
+                    ),
                   ),
-                ),
-                title: Text(
-                  member.name,
-                  style: TextStyle(
-                    fontWeight: FontWeight.w600,
-                    decoration: member.isActive
-                        ? null
-                        : TextDecoration.lineThrough,
+                  title: Wrap(
+                    spacing: 8,
+                    runSpacing: 4,
+                    crossAxisAlignment: WrapCrossAlignment.center,
+                    children: [
+                      Text(
+                        member.name,
+                        style: TextStyle(
+                          fontWeight: FontWeight.w600,
+                          decoration: member.isActive
+                              ? null
+                              : TextDecoration.lineThrough,
+                        ),
+                      ),
+                      if (isYou)
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 8,
+                            vertical: 2,
+                          ),
+                          decoration: BoxDecoration(
+                            color:
+                                Theme.of(context).colorScheme.primaryContainer,
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: Text(
+                            strings.youBadge,
+                            style: TextStyle(
+                              fontSize: 11,
+                              fontWeight: FontWeight.w600,
+                              color: Theme.of(context)
+                                  .colorScheme
+                                  .onPrimaryContainer,
+                            ),
+                          ),
+                        ),
+                    ],
                   ),
-                ),
                 subtitle: member.isActive
                     ? null
                     : Text(
@@ -191,6 +322,7 @@ class AccountsScreen extends ConsumerWidget {
                     ),
                   ],
                 ),
+              ),
               ),
             );
           }),
@@ -277,24 +409,34 @@ class AccountsScreen extends ConsumerWidget {
         ),
         const SizedBox(height: 20),
 
-        // App Brand Card
+        // User Guide Card
         Card(
           child: ListTile(
-            leading: ClipRRect(
-              borderRadius: BorderRadius.circular(10),
-              child: Image.asset(
-                'assets/icon/app_icon.png',
-                width: 44,
-                height: 44,
+            leading: CircleAvatar(
+              backgroundColor:
+                  Theme.of(context).colorScheme.secondaryContainer,
+              child: Icon(
+                Icons.menu_book_outlined,
+                color: Theme.of(context).colorScheme.onSecondaryContainer,
               ),
             ),
-            title: const Text(
-              'SiteShinn • စိုက်ရှင်း',
-              style: TextStyle(fontWeight: FontWeight.bold),
+            title: Text(
+              strings.userGuideTitle,
+              style: const TextStyle(fontWeight: FontWeight.w600),
             ),
-            subtitle: const Text('Version 1.0 • Offline Local Storage'),
+            subtitle: Text(strings.userGuideSubtitle),
+            trailing: const Icon(Icons.chevron_right_rounded),
+            onTap: () {
+              Navigator.of(context).push(
+                MaterialPageRoute(builder: (_) => const UserGuideScreen()),
+              );
+            },
           ),
         ),
+        const SizedBox(height: 10),
+
+        // App Brand & Manual Update Check Card
+        const _AppBrandAndUpdateCard(),
       ],
     );
   }
@@ -509,9 +651,7 @@ class _ReminderSettingsCardState extends ConsumerState<_ReminderSettingsCard> {
             Expanded(
               child: Text(
                 strings.reminderSection,
-                style: Theme.of(context)
-                    .textTheme
-                    .titleMedium
+                style: Theme.of(context).textTheme.titleMedium
                     ?.copyWith(fontWeight: FontWeight.bold),
               ),
             ),
@@ -548,14 +688,16 @@ class _ReminderSettingsCardState extends ConsumerState<_ReminderSettingsCard> {
                     padding: const EdgeInsets.all(16),
                     child: Text(
                       strings.noAlarmsYet,
-                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                            color: colorScheme.onSurfaceVariant,
-                          ),
+                      style: Theme.of(context).textTheme.bodySmall
+                          ?.copyWith(color: colorScheme.onSurfaceVariant),
                     ),
                   )
                 else
                   ...settings.alarms.map((alarm) {
-                    final tod = TimeOfDay(hour: alarm.hour, minute: alarm.minute);
+                    final tod = TimeOfDay(
+                      hour: alarm.hour,
+                      minute: alarm.minute,
+                    );
                     return ListTile(
                       leading: const Icon(Icons.access_time_outlined),
                       title: InkWell(
@@ -583,9 +725,7 @@ class _ReminderSettingsCardState extends ConsumerState<_ReminderSettingsCard> {
                         },
                         child: Text(
                           tod.format(context),
-                          style: Theme.of(context)
-                              .textTheme
-                              .titleMedium
+                          style: Theme.of(context).textTheme.titleMedium
                               ?.copyWith(
                                 fontWeight: FontWeight.bold,
                                 color: alarm.enabled
@@ -606,8 +746,9 @@ class _ReminderSettingsCardState extends ConsumerState<_ReminderSettingsCard> {
                               if (context.mounted) {
                                 ScaffoldMessenger.of(context).showSnackBar(
                                   SnackBar(
-                                    content:
-                                        Text(strings.reminderScheduledToast),
+                                    content: Text(
+                                      strings.reminderScheduledToast,
+                                    ),
                                   ),
                                 );
                               }
@@ -633,9 +774,8 @@ class _ReminderSettingsCardState extends ConsumerState<_ReminderSettingsCard> {
                     style: const TextStyle(fontSize: 12),
                   ),
                   value: settings.alarmMode,
-                  onChanged: (val) => ref
-                      .read(appSettingsProvider.notifier)
-                      .setAlarmMode(val),
+                  onChanged: (val) =>
+                      ref.read(appSettingsProvider.notifier).setAlarmMode(val),
                 ),
                 ListTile(
                   leading: const Icon(Icons.music_note_outlined),
@@ -686,9 +826,8 @@ class _ReminderSettingsCardState extends ConsumerState<_ReminderSettingsCard> {
                     children: [
                       Text(
                         strings.chinaRomTip,
-                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                              color: colorScheme.onSurfaceVariant,
-                            ),
+                        style: Theme.of(context).textTheme.bodySmall
+                            ?.copyWith(color: colorScheme.onSurfaceVariant),
                       ),
                       const SizedBox(height: 10),
                       Wrap(
@@ -749,6 +888,398 @@ class _ReminderSettingsCardState extends ConsumerState<_ReminderSettingsCard> {
           ),
         ),
       ],
+    );
+  }
+}
+
+class _CloudAccountCard extends ConsumerStatefulWidget {
+  const _CloudAccountCard();
+
+  @override
+  ConsumerState<_CloudAccountCard> createState() => _CloudAccountCardState();
+}
+
+class _CloudAccountCardState extends ConsumerState<_CloudAccountCard> {
+  bool _isMigrating = false;
+
+  Future<void> _migrateLocalData(AppStrings strings) async {
+    setState(() => _isMigrating = true);
+    try {
+      await ref.read(dashboardProvider.notifier).migrateLocalToCloud();
+      if (mounted) {
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text(strings.migratedToast)));
+      }
+    } catch (e) {
+      final msg = await AppErrorFormatter.formatErrorAsync(e, strings);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(msg)),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _isMigrating = false);
+    }
+  }
+
+  Future<void> _confirmLogout(AppStrings strings) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text(strings.logoutBtn),
+        content: Text(strings.logoutConfirm),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(false),
+            child: Text(strings.cancel),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(ctx).pop(true),
+            child: Text(strings.logoutBtn),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true) return;
+    await AuthService.instance.signOut();
+    await ref.read(appSettingsProvider.notifier).setOfflineGuestMode(false);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final strings = ref.watch(appStringsProvider);
+    final authUser =
+        ref.watch(authUserProvider).value ?? AuthService.instance.currentUser;
+    final dashboard = ref.watch(dashboardProvider).value;
+    final localUnmigratedCount = dashboard?.localUnmigratedCount ?? 0;
+    final colorScheme = Theme.of(context).colorScheme;
+
+    if (authUser == null) {
+      return Card(
+        child: Padding(
+          padding: const EdgeInsets.all(14),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Row(
+                children: [
+                  CircleAvatar(
+                    backgroundColor: colorScheme.surfaceContainerHighest,
+                    child: const Icon(Icons.cloud_off_outlined),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Text(
+                      strings.offlineModeBadge,
+                      style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 12),
+              FilledButton.tonalIcon(
+                onPressed: () {
+                  Navigator.of(context).push(
+                    MaterialPageRoute(
+                      builder: (_) => const AuthScreen(canPop: true),
+                    ),
+                  );
+                },
+                icon: const Icon(Icons.login_rounded, size: 18),
+                label: Text(strings.signInToSyncBtn),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
+    final rawName = authUser.displayName;
+    final displayName = (rawName != null && rawName.trim().isNotEmpty)
+        ? rawName.trim()
+        : (authUser.email ?? strings.cloudSyncedBadge);
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        if (dashboard?.isOfflineFallback == true) ...[
+          Card(
+            color: colorScheme.secondaryContainer.withValues(alpha: 0.45),
+            child: Padding(
+              padding: const EdgeInsets.all(14),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Row(
+                    children: [
+                      const Icon(Icons.wifi_off_rounded),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              strings.offlineModeBadge,
+                              style: const TextStyle(
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                            const SizedBox(height: 2),
+                            Text(
+                              strings.offlineBannerText,
+                              style: Theme.of(context).textTheme.bodySmall,
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 10),
+                  Align(
+                    alignment: Alignment.centerRight,
+                    child: FilledButton.tonal(
+                      onPressed: () =>
+                          ref.read(dashboardProvider.notifier).retryOnline(),
+                      child: Text(strings.retryOnlineBtn),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          const SizedBox(height: 8),
+        ],
+        Card(
+          child: Tooltip(
+            message: authUser.email != null
+                ? '$displayName (${authUser.email!})'
+                : displayName,
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(14, 14, 14, 10),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Row(
+                    children: [
+                      CircleAvatar(
+                        radius: 22,
+                        backgroundColor: colorScheme.primaryContainer,
+                        child: Icon(
+                          Icons.cloud_done_outlined,
+                          color: colorScheme.onPrimaryContainer,
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              displayName,
+                              style: Theme.of(context).textTheme.titleMedium
+                                  ?.copyWith(fontWeight: FontWeight.bold),
+                            ),
+                            if (authUser.email != null) ...[
+                              const SizedBox(height: 2),
+                              Text(
+                                authUser.email!,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: Theme.of(context).textTheme.bodyMedium
+                                    ?.copyWith(
+                                      color: colorScheme.onSurfaceVariant,
+                                    ),
+                              ),
+                            ],
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 10),
+                  const Divider(height: 1),
+                  const SizedBox(height: 6),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 10,
+                          vertical: 5,
+                        ),
+                        decoration: BoxDecoration(
+                          color: colorScheme.primaryContainer.withValues(
+                            alpha: 0.65,
+                          ),
+                          borderRadius: BorderRadius.circular(20),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(
+                              Icons.verified_outlined,
+                              size: 14,
+                              color: colorScheme.onPrimaryContainer,
+                            ),
+                            const SizedBox(width: 5),
+                            Text(
+                              strings.cloudSyncedBadge,
+                              style: TextStyle(
+                                fontSize: 12,
+                                fontWeight: FontWeight.w600,
+                                color: colorScheme.onPrimaryContainer,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      TextButton.icon(
+                        onPressed: () => _confirmLogout(strings),
+                        style: TextButton.styleFrom(
+                          visualDensity: VisualDensity.compact,
+                        ),
+                        icon: const Icon(Icons.logout_rounded, size: 18),
+                        label: Text(strings.logoutBtn),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+        if (localUnmigratedCount > 0) ...[
+          const SizedBox(height: 8),
+          Card(
+            color: colorScheme.primaryContainer.withValues(alpha: 0.45),
+            child: Padding(
+              padding: const EdgeInsets.all(14),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Icon(
+                        Icons.cloud_upload_outlined,
+                        color: colorScheme.primary,
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          strings.migrateV1Title,
+                          style: const TextStyle(fontWeight: FontWeight.bold),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 6),
+                  Text(strings.migrateV1Body(localUnmigratedCount)),
+                  const SizedBox(height: 10),
+                  FilledButton.icon(
+                    onPressed: _isMigrating
+                        ? null
+                        : () => _migrateLocalData(strings),
+                    icon: _isMigrating
+                        ? const SizedBox(
+                            width: 16,
+                            height: 16,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          )
+                        : const Icon(Icons.upload_rounded, size: 18),
+                    label: Text(strings.migrateNowBtn),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ],
+    );
+  }
+}
+
+class _AppBrandAndUpdateCard extends ConsumerStatefulWidget {
+  const _AppBrandAndUpdateCard();
+
+  @override
+  ConsumerState<_AppBrandAndUpdateCard> createState() =>
+      _AppBrandAndUpdateCardState();
+}
+
+class _AppBrandAndUpdateCardState
+    extends ConsumerState<_AppBrandAndUpdateCard> {
+  bool _isChecking = false;
+
+  Future<void> _checkUpdates(AppStrings strings) async {
+    setState(() => _isChecking = true);
+    try {
+      final info = await AppUpdateService.instance.checkForUpdate(
+        isBurmese: strings.isBurmese,
+      );
+      if (!mounted) return;
+      if (info != null) {
+        await AppUpdateDialog.show(context, info: info, strings: strings);
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(strings.upToDateToast)),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _isChecking = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final strings = ref.watch(appStringsProvider);
+
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.only(bottom: 8),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            ListTile(
+              leading: ClipRRect(
+                borderRadius: BorderRadius.circular(10),
+                child: Image.asset(
+                  'assets/icon/app_icon.png',
+                  width: 44,
+                  height: 44,
+                ),
+              ),
+              title: const Text(
+                'SiteShinn • စိုက်ရှင်း',
+                style: TextStyle(fontWeight: FontWeight.bold),
+              ),
+              subtitle: const Text('v2.0.1 • Wai Linn Naing'),
+            ),
+            if (AppEnv.isCloudConfigured)
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16),
+                child: OutlinedButton.icon(
+                  onPressed:
+                      _isChecking ? null : () => _checkUpdates(strings),
+                  icon: _isChecking
+                      ? const SizedBox(
+                          width: 14,
+                          height: 14,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      : const Icon(Icons.system_update_alt_rounded, size: 18),
+                  label: Text(
+                    _isChecking
+                        ? strings.checkingUpdates
+                        : strings.checkUpdateBtn,
+                  ),
+                ),
+              ),
+          ],
+        ),
+      ),
     );
   }
 }

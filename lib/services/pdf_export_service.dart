@@ -1,11 +1,10 @@
+import 'dart:convert';
 import 'dart:io';
 
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/services.dart';
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
-import 'package:pdf/pdf.dart';
-import 'package:pdf/widgets.dart' as pw;
 import 'package:share_plus/share_plus.dart';
 
 import '../core/l10n/app_strings.dart';
@@ -14,241 +13,217 @@ import '../data/models/account.dart';
 import '../data/models/member.dart';
 import '../data/models/personal_summary.dart';
 import '../data/models/settlement_summary.dart';
+import 'export_file_opener.dart';
 
 class PdfExportService {
+  static const MethodChannel _channel = MethodChannel(
+    'com.siteshinn.site_shinn/device_settings',
+  );
+  static const HtmlEscape _htmlEscape = HtmlEscape();
+
+  static Map<String, dynamic> buildCyclePdfPayload({
+    required Account account,
+    required CycleSettlementReport report,
+    required List<Member> allMembers,
+    required AppStrings strings,
+    String outputPath = '',
+  }) {
+    final memberById = {for (final m in allMembers) m.id: m};
+    final currency = account.currencyCode;
+    final expenseTitleHeader = strings.titleLabel.split('(').first.trim();
+
+    final transferRows = report.transfers
+        .map(
+          (t) => [
+            t.fromMemberName,
+            t.toMemberName,
+            AppFormatters.formatAmount(t.amount, currency),
+            t.isPaid ? strings.markPaidLabel : '-',
+          ],
+        )
+        .toList();
+
+    final balanceRows = report.balances
+        .map(
+          (b) => [
+            b.member.name,
+            AppFormatters.formatAmount(b.totalPaid, currency),
+            AppFormatters.formatAmount(b.totalShare, currency),
+            AppFormatters.formatSignedAmount(b.netBalance, currency),
+          ],
+        )
+        .toList();
+
+    final expenseRows = report.expenses.map((e) {
+      final payerName = memberById[e.paidByMemberId]?.name ?? 'Unknown';
+      return [
+        AppFormatters.formatShortDate(e.expenseDate),
+        e.title,
+        strings.categoryName(e.category),
+        payerName,
+        AppFormatters.formatAmount(e.amount, currency),
+      ];
+    }).toList();
+
+    return {
+      'outputPath': outputPath,
+      'brandTitle': 'SiteShinn • ${account.name}',
+      'subtitle':
+          '${strings.displayCycleTitle(report.cycle)}  |  ${AppFormatters.formatDateRange(report.cycle.startDate, report.cycle.endDate ?? DateTime.now())}',
+      'summaryLabel': strings.totalSpent,
+      'summaryValue': AppFormatters.formatAmount(report.totalExpense, currency),
+      'footerText': 'SiteShinn (စိုက်ရှင်း)',
+      'sections': [
+        {
+          'title': strings.whoPaysWhom,
+          'emptyMessage': strings.allSettledMsg,
+          'headers': ['From', 'To', strings.amountLabel, 'Status'],
+          'alignments': ['left', 'left', 'right', 'center'],
+          'weights': [2.2, 2.2, 1.5, 1.0],
+          'rows': transferRows,
+        },
+        {
+          'title': strings.memberBalances,
+          'headers': [
+            'Member',
+            strings.totalPaid,
+            strings.fairShare,
+            strings.netBalance,
+          ],
+          'alignments': ['left', 'right', 'right', 'right'],
+          'weights': [2.2, 1.5, 1.5, 1.5],
+          'rows': balanceRows,
+        },
+        {
+          'title': '${strings.navExpenses} (${report.expenses.length})',
+          'headers': [
+            strings.dateLabel,
+            expenseTitleHeader,
+            strings.categoryLabel,
+            strings.paidByLabel,
+            strings.amountLabel,
+          ],
+          'alignments': ['left', 'left', 'left', 'left', 'right'],
+          'weights': [1.3, 2.3, 1.4, 1.4, 1.3],
+          'rows': expenseRows,
+        },
+      ],
+    };
+  }
+
+  static Map<String, dynamic> buildPersonalPdfPayload({
+    required Account account,
+    required PersonalLedgerSummary summary,
+    required String periodLabel,
+    required AppStrings strings,
+    String outputPath = '',
+  }) {
+    final currency = account.currencyCode;
+    final expenseTitleHeader = strings.titleLabel.split('(').first.trim();
+
+    final txRows = summary.filteredTransactions.map((tx) {
+      final typeStr = tx.isIncome ? strings.incomeLabel : strings.expenseLabel;
+      final signedAmount = tx.isIncome ? tx.amount : -tx.amount;
+      return [
+        AppFormatters.formatShortDate(tx.expenseDate),
+        tx.title,
+        strings.categoryName(tx.category),
+        typeStr,
+        AppFormatters.formatSignedAmount(signedAmount, currency),
+      ];
+    }).toList();
+
+    return {
+      'outputPath': outputPath,
+      'brandTitle': 'SiteShinn • ${account.name}',
+      'subtitle': '${strings.personalSummaryTitle}  |  $periodLabel',
+      'summaryLabel': strings.currentBalanceLabel,
+      'summaryValue':
+          AppFormatters.formatAmount(summary.currentBalance, currency),
+      'footerText': 'SiteShinn (စိုက်ရှင်း)',
+      'sections': [
+        {
+          'headers': [
+            strings.openingBalanceLabel,
+            strings.totalIncomeLabel,
+            strings.totalExpenseLabel,
+            strings.currentBalanceLabel,
+          ],
+          'alignments': ['right', 'right', 'right', 'right'],
+          'weights': [1.0, 1.0, 1.0, 1.0],
+          'rows': [
+            [
+              AppFormatters.formatAmount(summary.openingBalance, currency),
+              AppFormatters.formatAmount(summary.periodIncome, currency),
+              AppFormatters.formatAmount(summary.periodExpense, currency),
+              AppFormatters.formatAmount(summary.currentBalance, currency),
+            ],
+          ],
+        },
+        {
+          'title':
+              '${strings.navLedger} (${summary.filteredTransactions.length})',
+          'headers': [
+            strings.dateLabel,
+            expenseTitleHeader,
+            strings.categoryLabel,
+            'Type',
+            strings.amountLabel,
+          ],
+          'alignments': ['left', 'left', 'left', 'left', 'right'],
+          'weights': [1.3, 2.3, 1.4, 1.1, 1.4],
+          'rows': txRows,
+        },
+      ],
+    };
+  }
+
+  /// Kept for HTML sanity tests and potential web/desktop fallback.
+  static String buildCycleHtml({
+    required Account account,
+    required CycleSettlementReport report,
+    required List<Member> allMembers,
+    required AppStrings strings,
+  }) {
+    final payload = buildCyclePdfPayload(
+      account: account,
+      report: report,
+      allMembers: allMembers,
+      strings: strings,
+    );
+    final sections = payload['sections'] as List<dynamic>;
+    final transfersRows = (sections[0] as Map)['rows'] as List<dynamic>;
+    final transfersHtml = transfersRows.isEmpty
+        ? _htmlEscape.convert(strings.allSettledMsg)
+        : transfersRows
+            .map((r) => (r as List).map((c) => _htmlEscape.convert('$c')).join(' | '))
+            .join('\n');
+    return '<html lang="${strings.isBurmese ? 'my' : 'en'}">'
+        '${_htmlEscape.convert(payload['brandTitle'] as String)}\n$transfersHtml</html>';
+  }
+
   static Future<File> generateCyclePdf({
     required Account account,
     required CycleSettlementReport report,
     required List<Member> allMembers,
     required AppStrings strings,
   }) async {
-    final regularFontData =
-        await rootBundle.load('assets/fonts/Pyidaungsu-Regular.ttf');
-    final boldFontData =
-        await rootBundle.load('assets/fonts/Pyidaungsu-Bold.ttf');
-
-    final regularFont = pw.Font.ttf(regularFontData);
-    final boldFont = pw.Font.ttf(boldFontData);
-
-    final theme = pw.ThemeData.withFont(
-      base: regularFont,
-      bold: boldFont,
-    );
-
-    final pdf = pw.Document(theme: theme);
-    final memberById = {for (final m in allMembers) m.id: m};
-    final currency = account.currencyCode;
-
-    final primaryColor = PdfColor.fromHex('#0F766E');
-    final lightBg = PdfColor.fromHex('#F0FDFA');
-    final borderColor = PdfColor.fromHex('#CBD5E1');
-
-    pdf.addPage(
-      pw.MultiPage(
-        pageFormat: PdfPageFormat.a4,
-        margin: const pw.EdgeInsets.all(28),
-        footer: (context) => pw.Align(
-          alignment: pw.Alignment.centerRight,
-          child: pw.Text(
-            'SiteShinn (စိုက်ရှင်း) • Page ${context.pageNumber} of ${context.pagesCount}',
-            style: const pw.TextStyle(fontSize: 9, color: PdfColors.grey600),
-          ),
-        ),
-        build: (context) => [
-          // Header Banner
-          pw.Container(
-            padding: const pw.EdgeInsets.all(16),
-            decoration: pw.BoxDecoration(
-              color: primaryColor,
-              borderRadius: pw.BorderRadius.circular(8),
-            ),
-            child: pw.Row(
-              mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
-              crossAxisAlignment: pw.CrossAxisAlignment.start,
-              children: [
-                pw.Column(
-                  crossAxisAlignment: pw.CrossAxisAlignment.start,
-                  children: [
-                    pw.Text(
-                      'SiteShinn • ${account.name}',
-                      style: pw.TextStyle(
-                        fontSize: 18,
-                        fontWeight: pw.FontWeight.bold,
-                        color: PdfColors.white,
-                      ),
-                    ),
-                    pw.SizedBox(height: 4),
-                    pw.Text(
-                      '${strings.displayCycleTitle(report.cycle)}  |  ${AppFormatters.formatDateRange(report.cycle.startDate, report.cycle.endDate)}',
-                      style: const pw.TextStyle(
-                        fontSize: 11,
-                        color: PdfColors.white,
-                      ),
-                    ),
-                  ],
-                ),
-                pw.Column(
-                  crossAxisAlignment: pw.CrossAxisAlignment.end,
-                  children: [
-                    pw.Text(
-                      strings.totalSpent,
-                      style: const pw.TextStyle(
-                        fontSize: 10,
-                        color: PdfColors.white,
-                      ),
-                    ),
-                    pw.Text(
-                      AppFormatters.formatAmount(report.totalExpense, currency),
-                      style: pw.TextStyle(
-                        fontSize: 16,
-                        fontWeight: pw.FontWeight.bold,
-                        color: PdfColors.white,
-                      ),
-                    ),
-                  ],
-                ),
-              ],
-            ),
-          ),
-          pw.SizedBox(height: 18),
-
-          // Who Pays Whom Section
-          pw.Text(
-            strings.whoPaysWhom,
-            style: pw.TextStyle(
-              fontSize: 13,
-              fontWeight: pw.FontWeight.bold,
-              color: primaryColor,
-            ),
-          ),
-          pw.SizedBox(height: 8),
-          if (report.transfers.isEmpty)
-            pw.Container(
-              padding: const pw.EdgeInsets.all(10),
-              decoration: pw.BoxDecoration(
-                color: lightBg,
-                borderRadius: pw.BorderRadius.circular(6),
-              ),
-              child: pw.Text(strings.allSettledMsg,
-                  style: const pw.TextStyle(fontSize: 10)),
-            )
-          else
-            pw.TableHelper.fromTextArray(
-              headerStyle: pw.TextStyle(
-                fontWeight: pw.FontWeight.bold,
-                fontSize: 10,
-                color: PdfColors.white,
-              ),
-              headerDecoration: pw.BoxDecoration(color: primaryColor),
-              cellStyle: const pw.TextStyle(fontSize: 10),
-              border: pw.TableBorder.all(color: borderColor, width: 0.5),
-              headers: ['From', 'To', 'Amount'],
-              data: report.transfers
-                  .map(
-                    (t) => [
-                      t.fromMemberName,
-                      t.toMemberName,
-                      AppFormatters.formatAmount(t.amount, currency),
-                    ],
-                  )
-                  .toList(),
-            ),
-          pw.SizedBox(height: 18),
-
-          // Member Balances Section
-          pw.Text(
-            strings.memberBalances,
-            style: pw.TextStyle(
-              fontSize: 13,
-              fontWeight: pw.FontWeight.bold,
-              color: primaryColor,
-            ),
-          ),
-          pw.SizedBox(height: 8),
-          pw.TableHelper.fromTextArray(
-            headerStyle: pw.TextStyle(
-              fontWeight: pw.FontWeight.bold,
-              fontSize: 10,
-              color: PdfColors.white,
-            ),
-            headerDecoration: pw.BoxDecoration(color: primaryColor),
-            cellStyle: const pw.TextStyle(fontSize: 10),
-            border: pw.TableBorder.all(color: borderColor, width: 0.5),
-            headers: [
-              'Member',
-              strings.totalPaid,
-              strings.fairShare,
-              strings.netBalance,
-            ],
-            data: report.balances
-                .map(
-                  (b) => [
-                    b.member.name,
-                    AppFormatters.formatAmount(b.totalPaid, currency),
-                    AppFormatters.formatAmount(b.totalShare, currency),
-                    AppFormatters.formatSignedAmount(b.netBalance, currency),
-                  ],
-                )
-                .toList(),
-          ),
-          pw.SizedBox(height: 18),
-
-          // Itemized Expenses Section
-          pw.Text(
-            '${strings.navExpenses} (${report.expenses.length})',
-            style: pw.TextStyle(
-              fontSize: 13,
-              fontWeight: pw.FontWeight.bold,
-              color: primaryColor,
-            ),
-          ),
-          pw.SizedBox(height: 8),
-          if (report.expenses.isNotEmpty)
-            pw.TableHelper.fromTextArray(
-              headerStyle: pw.TextStyle(
-                fontWeight: pw.FontWeight.bold,
-                fontSize: 9,
-                color: PdfColors.white,
-              ),
-              headerDecoration: pw.BoxDecoration(color: primaryColor),
-              cellStyle: const pw.TextStyle(fontSize: 9),
-              border: pw.TableBorder.all(color: borderColor, width: 0.5),
-              columnWidths: {
-                0: const pw.FlexColumnWidth(1.4),
-                1: const pw.FlexColumnWidth(2.4),
-                2: const pw.FlexColumnWidth(1.5),
-                3: const pw.FlexColumnWidth(1.4),
-                4: const pw.FlexColumnWidth(1.3),
-              },
-              headers: [
-                strings.dateLabel,
-                strings.titleLabel.split('(').first.trim(),
-                strings.categoryLabel,
-                strings.paidByLabel,
-                strings.amountLabel,
-              ],
-              data: report.expenses.map((e) {
-                final payerName =
-                    memberById[e.paidByMemberId]?.name ?? 'Unknown';
-                return [
-                  AppFormatters.formatShortDate(e.expenseDate),
-                  e.title,
-                  strings.categoryName(e.category),
-                  payerName,
-                  AppFormatters.formatAmount(e.amount, currency),
-                ];
-              }).toList(),
-            ),
-        ],
-      ),
-    );
-
     final dir = await getTemporaryDirectory();
     final cycleTitle = strings.displayCycleTitle(report.cycle);
     final safeName =
         '${account.name}_$cycleTitle'.replaceAll(RegExp(r'[^\w\-]+'), '_');
     final file = File(p.join(dir.path, '${safeName}_report.pdf'));
-    await file.writeAsBytes(await pdf.save());
+
+    final payload = buildCyclePdfPayload(
+      account: account,
+      report: report,
+      allMembers: allMembers,
+      strings: strings,
+      outputPath: file.path,
+    );
+    await _channel
+        .invokeMethod<bool>('generateReportPdf', payload)
+        .timeout(const Duration(seconds: 20));
     return file;
   }
 
@@ -273,7 +248,7 @@ class PdfExportService {
     );
   }
 
-  static Future<bool> saveCyclePdfToDevice({
+  static Future<SavedExportResult?> saveCyclePdfToDevice({
     required Account account,
     required CycleSettlementReport report,
     required List<Member> allMembers,
@@ -286,13 +261,20 @@ class PdfExportService {
       strings: strings,
     );
     final bytes = await file.readAsBytes();
+    final fileName = p.basename(file.path);
     final savedUri = await FilePicker.saveFile(
       dialogTitle: strings.saveToDevice,
-      fileName: p.basename(file.path),
+      fileName: fileName,
       bytes: bytes,
       mimeType: 'application/pdf',
     );
-    return savedUri != null;
+    if (savedUri == null) return null;
+    return SavedExportResult(
+      uriOrPath: savedUri.toString(),
+      localFallbackPath: file.path,
+      mimeType: 'application/pdf',
+      fileName: fileName,
+    );
   }
 
   static Future<File> generatePersonalPdf({
@@ -301,163 +283,21 @@ class PdfExportService {
     required String periodLabel,
     required AppStrings strings,
   }) async {
-    final regularFontData =
-        await rootBundle.load('assets/fonts/Pyidaungsu-Regular.ttf');
-    final boldFontData =
-        await rootBundle.load('assets/fonts/Pyidaungsu-Bold.ttf');
-
-    final theme = pw.ThemeData.withFont(
-      base: pw.Font.ttf(regularFontData),
-      bold: pw.Font.ttf(boldFontData),
-    );
-
-    final pdf = pw.Document(theme: theme);
-    final currency = account.currencyCode;
-    final primaryColor = PdfColor.fromHex('#0F766E');
-    final borderColor = PdfColor.fromHex('#CBD5E1');
-
-    pdf.addPage(
-      pw.MultiPage(
-        pageFormat: PdfPageFormat.a4,
-        margin: const pw.EdgeInsets.all(28),
-        footer: (context) => pw.Align(
-          alignment: pw.Alignment.centerRight,
-          child: pw.Text(
-            'SiteShinn (စိုက်ရှင်း) • Page ${context.pageNumber} of ${context.pagesCount}',
-            style: const pw.TextStyle(fontSize: 9, color: PdfColors.grey600),
-          ),
-        ),
-        build: (context) => [
-          pw.Container(
-            padding: const pw.EdgeInsets.all(16),
-            decoration: pw.BoxDecoration(
-              color: primaryColor,
-              borderRadius: pw.BorderRadius.circular(8),
-            ),
-            child: pw.Row(
-              mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
-              children: [
-                pw.Column(
-                  crossAxisAlignment: pw.CrossAxisAlignment.start,
-                  children: [
-                    pw.Text(
-                      'SiteShinn • ${account.name}',
-                      style: pw.TextStyle(
-                        fontSize: 18,
-                        fontWeight: pw.FontWeight.bold,
-                        color: PdfColors.white,
-                      ),
-                    ),
-                    pw.SizedBox(height: 4),
-                    pw.Text(
-                      '${strings.personalSummaryTitle}  |  $periodLabel',
-                      style: const pw.TextStyle(
-                        fontSize: 11,
-                        color: PdfColors.white,
-                      ),
-                    ),
-                  ],
-                ),
-                pw.Column(
-                  crossAxisAlignment: pw.CrossAxisAlignment.end,
-                  children: [
-                    pw.Text(
-                      strings.currentBalanceLabel,
-                      style: const pw.TextStyle(
-                        fontSize: 10,
-                        color: PdfColors.white,
-                      ),
-                    ),
-                    pw.Text(
-                      AppFormatters.formatAmount(
-                        summary.currentBalance,
-                        currency,
-                      ),
-                      style: pw.TextStyle(
-                        fontSize: 16,
-                        fontWeight: pw.FontWeight.bold,
-                        color: PdfColors.white,
-                      ),
-                    ),
-                  ],
-                ),
-              ],
-            ),
-          ),
-          pw.SizedBox(height: 16),
-          pw.TableHelper.fromTextArray(
-            headerStyle: pw.TextStyle(
-              fontWeight: pw.FontWeight.bold,
-              fontSize: 10,
-              color: PdfColors.white,
-            ),
-            headerDecoration: pw.BoxDecoration(color: primaryColor),
-            cellStyle: const pw.TextStyle(fontSize: 10),
-            border: pw.TableBorder.all(color: borderColor, width: 0.5),
-            headers: [
-              strings.openingBalanceLabel,
-              strings.totalIncomeLabel,
-              strings.totalExpenseLabel,
-              strings.currentBalanceLabel,
-            ],
-            data: [
-              [
-                AppFormatters.formatAmount(summary.openingBalance, currency),
-                AppFormatters.formatAmount(summary.periodIncome, currency),
-                AppFormatters.formatAmount(summary.periodExpense, currency),
-                AppFormatters.formatAmount(summary.currentBalance, currency),
-              ],
-            ],
-          ),
-          pw.SizedBox(height: 18),
-          pw.Text(
-            '${strings.navLedger} (${summary.filteredTransactions.length})',
-            style: pw.TextStyle(
-              fontSize: 13,
-              fontWeight: pw.FontWeight.bold,
-              color: primaryColor,
-            ),
-          ),
-          pw.SizedBox(height: 8),
-          if (summary.filteredTransactions.isNotEmpty)
-            pw.TableHelper.fromTextArray(
-              headerStyle: pw.TextStyle(
-                fontWeight: pw.FontWeight.bold,
-                fontSize: 9,
-                color: PdfColors.white,
-              ),
-              headerDecoration: pw.BoxDecoration(color: primaryColor),
-              cellStyle: const pw.TextStyle(fontSize: 9),
-              border: pw.TableBorder.all(color: borderColor, width: 0.5),
-              headers: [
-                strings.dateLabel,
-                strings.titleLabel.split('(').first.trim(),
-                strings.categoryLabel,
-                'Type',
-                strings.amountLabel,
-              ],
-              data: summary.filteredTransactions.map((tx) {
-                final typeStr =
-                    tx.isIncome ? strings.incomeLabel : strings.expenseLabel;
-                final signedAmount = tx.isIncome ? tx.amount : -tx.amount;
-                return [
-                  AppFormatters.formatShortDate(tx.expenseDate),
-                  tx.title,
-                  strings.categoryName(tx.category),
-                  typeStr,
-                  AppFormatters.formatSignedAmount(signedAmount, currency),
-                ];
-              }).toList(),
-            ),
-        ],
-      ),
-    );
-
     final dir = await getTemporaryDirectory();
     final safeName =
         '${account.name}_$periodLabel'.replaceAll(RegExp(r'[^\w\-]+'), '_');
     final file = File(p.join(dir.path, '${safeName}_wallet.pdf'));
-    await file.writeAsBytes(await pdf.save());
+
+    final payload = buildPersonalPdfPayload(
+      account: account,
+      summary: summary,
+      periodLabel: periodLabel,
+      strings: strings,
+      outputPath: file.path,
+    );
+    await _channel
+        .invokeMethod<bool>('generateReportPdf', payload)
+        .timeout(const Duration(seconds: 20));
     return file;
   }
 
@@ -481,7 +321,7 @@ class PdfExportService {
     );
   }
 
-  static Future<bool> savePersonalPdfToDevice({
+  static Future<SavedExportResult?> savePersonalPdfToDevice({
     required Account account,
     required PersonalLedgerSummary summary,
     required String periodLabel,
@@ -494,12 +334,19 @@ class PdfExportService {
       strings: strings,
     );
     final bytes = await file.readAsBytes();
+    final fileName = p.basename(file.path);
     final savedUri = await FilePicker.saveFile(
       dialogTitle: strings.saveToDevice,
-      fileName: p.basename(file.path),
+      fileName: fileName,
       bytes: bytes,
       mimeType: 'application/pdf',
     );
-    return savedUri != null;
+    if (savedUri == null) return null;
+    return SavedExportResult(
+      uriOrPath: savedUri.toString(),
+      localFallbackPath: file.path,
+      mimeType: 'application/pdf',
+      fileName: fileName,
+    );
   }
 }

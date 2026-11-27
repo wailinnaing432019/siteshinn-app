@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../core/utils/error_formatter.dart';
 import '../../core/utils/formatters.dart';
 import '../../data/models/account.dart';
 import '../../providers/app_providers.dart';
+import '../../services/auth_service.dart';
 
 class AccountSetupForm extends ConsumerStatefulWidget {
   final String initialAccountName;
@@ -44,6 +46,12 @@ class _AccountSetupFormState extends ConsumerState<AccountSetupForm> {
     super.initState();
     _accountNameController =
         TextEditingController(text: widget.initialAccountName);
+    final defaultMemberName = AuthService.instance.currentDisplayName;
+    if (defaultMemberName != null &&
+        defaultMemberName.isNotEmpty &&
+        _memberControllers.isNotEmpty) {
+      _memberControllers.first.text = defaultMemberName;
+    }
   }
 
   @override
@@ -96,6 +104,13 @@ class _AccountSetupFormState extends ConsumerState<AccountSetupForm> {
           0,
           names,
         );
+      } catch (e) {
+        final msg = await AppErrorFormatter.formatErrorAsync(e, strings);
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text(msg)),
+          );
+        }
       } finally {
         if (mounted) setState(() => _isSaving = false);
       }
@@ -121,6 +136,13 @@ class _AccountSetupFormState extends ConsumerState<AccountSetupForm> {
         opening,
         const [],
       );
+    } catch (e) {
+      final msg = await AppErrorFormatter.formatErrorAsync(e, strings);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(msg)),
+        );
+      }
     } finally {
       if (mounted) setState(() => _isSaving = false);
     }

@@ -8,8 +8,9 @@ import '../models/expense.dart';
 import '../models/member.dart';
 import '../models/settlement_cycle.dart';
 import '../models/settlement_summary.dart';
+import 'budget_data_source.dart';
 
-class BudgetRepository {
+class BudgetRepository implements BudgetDataSource {
   final AppDatabase _dbHelper;
   static const Uuid _uuid = Uuid();
 
@@ -20,18 +21,21 @@ class BudgetRepository {
 
   // ---------------- Accounts ----------------
 
+  @override
   Future<List<Account>> getAccounts() async {
     final db = await _db;
     final rows = await db.query('accounts', orderBy: 'created_at ASC');
     return rows.map(Account.fromMap).toList();
   }
 
+  @override
   Future<Account> createAccount({
     required String name,
     required String currencyCode,
     required AccountType accountType,
     double openingBalance = 0,
     List<String> memberNames = const [],
+    String? creatorMemberName,
   }) async {
     final db = await _db;
     final now = DateTime.now();
@@ -75,6 +79,7 @@ class BudgetRepository {
     return account;
   }
 
+  @override
   Future<void> updateAccount(Account account) async {
     final db = await _db;
     await db.update(
@@ -87,6 +92,7 @@ class BudgetRepository {
 
   // ---------------- Members ----------------
 
+  @override
   Future<List<Member>> getMembers(String accountId) async {
     final db = await _db;
     final rows = await db.query(
@@ -98,6 +104,7 @@ class BudgetRepository {
     return rows.map(Member.fromMap).toList();
   }
 
+  @override
   Future<Member> addMember({
     required String accountId,
     required String name,
@@ -114,6 +121,7 @@ class BudgetRepository {
     return member;
   }
 
+  @override
   Future<void> updateMember(Member member) async {
     final db = await _db;
     await db.update(
@@ -126,6 +134,7 @@ class BudgetRepository {
 
   // ---------------- Cycles ----------------
 
+  @override
   Future<SettlementCycle> getOrCreateOpenCycle(String accountId) async {
     final db = await _db;
     final rows = await db.query(
@@ -150,6 +159,7 @@ class BudgetRepository {
     return cycle;
   }
 
+  @override
   Future<List<SettlementCycle>> getSettledCycles(String accountId) async {
     final db = await _db;
     final rows = await db.query(
@@ -161,6 +171,7 @@ class BudgetRepository {
     return rows.map(SettlementCycle.fromMap).toList();
   }
 
+  @override
   Future<void> closeCycleAndStartNext({
     required SettlementCycle cycle,
     required String settledTitle,
@@ -196,6 +207,7 @@ class BudgetRepository {
     });
   }
 
+  @override
   Future<List<SettlementTransfer>> getTransfersForCycle({
     required String cycleId,
     required Map<String, Member> memberById,
@@ -209,6 +221,9 @@ class BudgetRepository {
     return rows.map((row) {
       final fromId = row['from_member_id'] as String;
       final toId = row['to_member_id'] as String;
+      final rawPaid = row['is_paid'];
+      final isPaid =
+          rawPaid is bool ? rawPaid : ((rawPaid as int? ?? 0) == 1);
       return SettlementTransfer(
         id: row['id'] as String,
         cycleId: row['cycle_id'] as String,
@@ -217,12 +232,34 @@ class BudgetRepository {
         fromMemberName: memberById[fromId]?.name ?? 'Unknown',
         toMemberName: memberById[toId]?.name ?? 'Unknown',
         amount: (row['amount'] as num).toDouble(),
+        isPaid: isPaid,
+        paidAt: row['paid_at'] != null
+            ? DateTime.parse(row['paid_at'] as String)
+            : null,
       );
     }).toList();
   }
 
+  @override
+  Future<void> markTransferPaid({
+    required String transferId,
+    required bool isPaid,
+  }) async {
+    final db = await _db;
+    await db.update(
+      'settlement_transfers',
+      {
+        'is_paid': isPaid ? 1 : 0,
+        'paid_at': isPaid ? DateTime.now().toIso8601String() : null,
+      },
+      where: 'id = ?',
+      whereArgs: [transferId],
+    );
+  }
+
   // ---------------- Expenses & Transactions ----------------
 
+  @override
   Future<List<Expense>> getExpensesForCycle(String cycleId) async {
     final db = await _db;
     final expenseRows = await db.query(
@@ -234,6 +271,7 @@ class BudgetRepository {
     return _attachSplits(db, expenseRows);
   }
 
+  @override
   Future<List<Expense>> getTransactionsForAccount(String accountId) async {
     final db = await _db;
     final expenseRows = await db.query(
@@ -275,6 +313,7 @@ class BudgetRepository {
         .toList();
   }
 
+  @override
   Future<void> saveTransaction({
     String? existingExpenseId,
     required String accountId,
@@ -345,6 +384,7 @@ class BudgetRepository {
     });
   }
 
+  @override
   Future<void> deleteExpense(String expenseId) async {
     final db = await _db;
     await db.delete('expenses', where: 'id = ?', whereArgs: [expenseId]);

@@ -18,7 +18,7 @@ class AppDatabase {
     final dbPath = p.join(dbDir, 'siteshinn.db');
     return openDatabase(
       dbPath,
-      version: 2,
+      version: 3,
       onConfigure: (db) async {
         await db.execute('PRAGMA foreign_keys = ON');
       },
@@ -31,10 +31,12 @@ class AppDatabase {
     await db.execute('''
       CREATE TABLE accounts (
         id TEXT PRIMARY KEY,
+        owner_id TEXT,
         name TEXT NOT NULL,
         currency_code TEXT NOT NULL DEFAULT 'MMK',
         account_type TEXT NOT NULL DEFAULT 'group',
         opening_balance REAL NOT NULL DEFAULT 0,
+        invite_code TEXT,
         created_at TEXT NOT NULL
       )
     ''');
@@ -43,6 +45,7 @@ class AppDatabase {
       CREATE TABLE members (
         id TEXT PRIMARY KEY,
         account_id TEXT NOT NULL,
+        user_id TEXT,
         name TEXT NOT NULL,
         is_active INTEGER NOT NULL DEFAULT 1,
         created_at TEXT NOT NULL,
@@ -68,6 +71,7 @@ class AppDatabase {
         account_id TEXT NOT NULL,
         cycle_id TEXT NOT NULL,
         paid_by_member_id TEXT,
+        created_by_user_id TEXT,
         tx_type TEXT NOT NULL DEFAULT 'expense',
         title TEXT NOT NULL,
         category TEXT NOT NULL,
@@ -98,6 +102,8 @@ class AppDatabase {
         from_member_id TEXT NOT NULL,
         to_member_id TEXT NOT NULL,
         amount REAL NOT NULL,
+        is_paid INTEGER NOT NULL DEFAULT 0,
+        paid_at TEXT,
         FOREIGN KEY (cycle_id) REFERENCES cycles(id) ON DELETE CASCADE,
         FOREIGN KEY (from_member_id) REFERENCES members(id),
         FOREIGN KEY (to_member_id) REFERENCES members(id)
@@ -154,6 +160,23 @@ class AppDatabase {
         );
       });
       await db.execute('PRAGMA foreign_keys = ON');
+    }
+
+    if (oldVersion < 3) {
+      await db.transaction((txn) async {
+        await txn.execute('ALTER TABLE accounts ADD COLUMN owner_id TEXT');
+        await txn.execute('ALTER TABLE accounts ADD COLUMN invite_code TEXT');
+        await txn.execute('ALTER TABLE members ADD COLUMN user_id TEXT');
+        await txn.execute(
+          'ALTER TABLE expenses ADD COLUMN created_by_user_id TEXT',
+        );
+        await txn.execute(
+          'ALTER TABLE settlement_transfers ADD COLUMN is_paid INTEGER NOT NULL DEFAULT 0',
+        );
+        await txn.execute(
+          'ALTER TABLE settlement_transfers ADD COLUMN paid_at TEXT',
+        );
+      });
     }
   }
 

@@ -82,13 +82,28 @@ class HistoryScreen extends ConsumerWidget {
   }
 }
 
-class CycleDetailScreen extends ConsumerWidget {
+class CycleDetailScreen extends ConsumerStatefulWidget {
   final SettlementCycle cycle;
 
   const CycleDetailScreen({super.key, required this.cycle});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<CycleDetailScreen> createState() => _CycleDetailScreenState();
+}
+
+class _CycleDetailScreenState extends ConsumerState<CycleDetailScreen> {
+  Future<CycleSettlementReport>? _reportFuture;
+
+  void _refreshReport() {
+    setState(() {
+      _reportFuture = ref
+          .read(dashboardProvider.notifier)
+          .loadHistoricalReport(widget.cycle);
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final strings = ref.watch(appStringsProvider);
     final dashboard = ref.watch(dashboardProvider).value;
     final account = dashboard?.activeAccount;
@@ -97,10 +112,13 @@ class CycleDetailScreen extends ConsumerWidget {
       return const Scaffold(body: Center(child: CircularProgressIndicator()));
     }
 
+    _reportFuture ??=
+        ref.read(dashboardProvider.notifier).loadHistoricalReport(widget.cycle);
+
     return Scaffold(
-      appBar: AppBar(title: Text(strings.displayCycleTitle(cycle))),
+      appBar: AppBar(title: Text(strings.displayCycleTitle(widget.cycle))),
       body: FutureBuilder<CycleSettlementReport>(
-        future: ref.read(dashboardProvider.notifier).loadHistoricalReport(cycle),
+        future: _reportFuture,
         builder: (context, snapshot) {
           if (!snapshot.hasData) {
             return const Center(child: CircularProgressIndicator());
@@ -111,6 +129,14 @@ class CycleDetailScreen extends ConsumerWidget {
             allMembers: dashboard?.members ?? [],
             strings: strings,
             isOpenCycle: false,
+            onToggleTransferPaid: (transferId, isPaid) async {
+              await ref
+                  .read(dashboardProvider.notifier)
+                  .markTransferPaid(transferId, isPaid);
+              if (mounted) {
+                _refreshReport();
+              }
+            },
           );
         },
       ),

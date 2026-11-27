@@ -168,3 +168,29 @@ For an open or closed cycle:
 - **Database Migration (SQLite v1 → v2):**
   - `accounts`: add `account_type TEXT NOT NULL DEFAULT 'group'`, `opening_balance REAL NOT NULL DEFAULT 0`.
   - `expenses` (or transactions): add `tx_type TEXT NOT NULL DEFAULT 'expense'`, make `paid_by_member_id` nullable (`TEXT`) for `personal` accounts so existing group data migrates losslessly.
+
+---
+
+## 9. Version 2 Implementation Plan — Auth & Multi-User Cloud Sync (Supabase)
+
+### 9.1 Authentication (Login / Sign Up / Logout)
+- **Dual Sign-In Providers:**
+  - **Email & Password** (`signInWithPassword`, `signUp`, `resetPasswordForEmail`)
+  - **Google Sign-In** (native Android `google_sign_in` -> `supabase.auth.signInWithIdToken`)
+- **Offline Fallback Option:** Keep a clear *"Continue Offline (Local Only)"* option or seamless V1 local-to-cloud migration prompt after first login so existing V1 records are never lost.
+
+### 9.2 Cloud Sync & Member Self-Entry
+- **Invite Code & Member Claiming:**
+  - Group accounts generate a short unique 6-character `invite_code` (e.g., `RM58K2`) shareable from the Accounts or Home switcher sheet.
+  - Other roommates tap **Join Group** -> preview group & unclaimed member slots -> either claim their existing member name (e.g., `"Kyaw"`) or join as a new member.
+- **Self-Entry Default:**
+  - When adding a Group expense, `Paid By` automatically defaults to the logged-in user's linked `member` in that group.
+- **Personal Wallet Privacy:**
+  - `personal` accounts remain strictly scoped to `owner_id == auth.uid()` via PostgreSQL RLS.
+- **Real-time Updates & Settlement Confirmation:**
+  - Supabase Realtime triggers automatic dashboard refresh when any roommate adds/edits/deletes an expense or settles a cycle.
+  - Transfers in Settled History support marking `is_paid` so roommates can track who already transferred their share.
+
+### 9.3 V2 Configuration & Security
+- Credentials passed cleanly via `--dart-define` (with a gitignored `env/v2.json` helper for local runs) so Supabase URL/anon key and Google Web Client ID stay cleanly separated from source code.
+- Full SQL schema, RLS policies, and RPCs maintained in `supabase/schema.sql`.

@@ -102,6 +102,7 @@ class Expense {
   final String accountId;
   final String cycleId;
   final String? paidByMemberId;
+  final String? createdByUserId;
   final TransactionType txType;
   final String title;
   final ExpenseCategory category;
@@ -115,6 +116,7 @@ class Expense {
     required this.accountId,
     required this.cycleId,
     this.paidByMemberId,
+    this.createdByUserId,
     this.txType = TransactionType.expense,
     required this.title,
     required this.category,
@@ -132,6 +134,7 @@ class Expense {
     String? accountId,
     String? cycleId,
     String? paidByMemberId,
+    String? createdByUserId,
     TransactionType? txType,
     String? title,
     ExpenseCategory? category,
@@ -145,6 +148,7 @@ class Expense {
       accountId: accountId ?? this.accountId,
       cycleId: cycleId ?? this.cycleId,
       paidByMemberId: paidByMemberId ?? this.paidByMemberId,
+      createdByUserId: createdByUserId ?? this.createdByUserId,
       txType: txType ?? this.txType,
       title: title ?? this.title,
       category: category ?? this.category,
@@ -161,6 +165,7 @@ class Expense {
       'account_id': accountId,
       'cycle_id': cycleId,
       'paid_by_member_id': paidByMemberId,
+      'created_by_user_id': createdByUserId,
       'tx_type': txType.key,
       'title': title,
       'category': category.key,
@@ -179,6 +184,7 @@ class Expense {
       accountId: map['account_id'] as String,
       cycleId: map['cycle_id'] as String,
       paidByMemberId: map['paid_by_member_id'] as String?,
+      createdByUserId: map['created_by_user_id'] as String?,
       txType: TransactionType.fromKey(map['tx_type'] as String?),
       title: map['title'] as String,
       category: ExpenseCategory.fromKey(map['category'] as String?),

@@ -13,6 +13,7 @@ import '../data/models/account.dart';
 import '../data/models/member.dart';
 import '../data/models/personal_summary.dart';
 import '../data/models/settlement_summary.dart';
+import 'export_file_opener.dart';
 
 class ExcelExportService {
   static const String _xlsxMimeType =
@@ -53,7 +54,7 @@ class ExcelExportService {
       TextCellValue(
         AppFormatters.formatDateRange(
           report.cycle.startDate,
-          report.cycle.endDate,
+          report.cycle.endDate ?? DateTime.now(),
         ),
       ),
     ]);
@@ -177,7 +178,7 @@ class ExcelExportService {
     );
   }
 
-  static Future<bool> saveCycleExcelToDevice({
+  static Future<SavedExportResult?> saveCycleExcelToDevice({
     required Account account,
     required CycleSettlementReport report,
     required List<Member> allMembers,
@@ -189,13 +190,23 @@ class ExcelExportService {
       allMembers: allMembers,
       strings: strings,
     );
+    final dir = await getTemporaryDirectory();
+    final tempFile = File(p.join(dir.path, data.fileName));
+    await tempFile.writeAsBytes(data.bytes, flush: true);
+
     final savedUri = await FilePicker.saveFile(
       dialogTitle: strings.saveToDevice,
       fileName: data.fileName,
       bytes: data.bytes,
       mimeType: _xlsxMimeType,
     );
-    return savedUri != null;
+    if (savedUri == null) return null;
+    return SavedExportResult(
+      uriOrPath: savedUri.toString(),
+      localFallbackPath: tempFile.path,
+      mimeType: _xlsxMimeType,
+      fileName: data.fileName,
+    );
   }
 
   static Future<({String fileName, Uint8List bytes})> buildPersonalExcelData({
@@ -298,7 +309,7 @@ class ExcelExportService {
     );
   }
 
-  static Future<bool> savePersonalExcelToDevice({
+  static Future<SavedExportResult?> savePersonalExcelToDevice({
     required Account account,
     required PersonalLedgerSummary summary,
     required String periodLabel,
@@ -310,12 +321,22 @@ class ExcelExportService {
       periodLabel: periodLabel,
       strings: strings,
     );
+    final dir = await getTemporaryDirectory();
+    final tempFile = File(p.join(dir.path, data.fileName));
+    await tempFile.writeAsBytes(data.bytes, flush: true);
+
     final savedUri = await FilePicker.saveFile(
       dialogTitle: strings.saveToDevice,
       fileName: data.fileName,
       bytes: data.bytes,
       mimeType: _xlsxMimeType,
     );
-    return savedUri != null;
+    if (savedUri == null) return null;
+    return SavedExportResult(
+      uriOrPath: savedUri.toString(),
+      localFallbackPath: tempFile.path,
+      mimeType: _xlsxMimeType,
+      fileName: data.fileName,
+    );
   }
 }

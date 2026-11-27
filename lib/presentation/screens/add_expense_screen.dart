@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../core/utils/error_formatter.dart';
 import '../../core/utils/formatters.dart';
 import '../../data/models/expense.dart';
 import '../../data/models/member.dart';
@@ -77,8 +78,8 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
     _amountController = TextEditingController(
       text: existing != null
           ? (existing.amount == existing.amount.roundToDouble()
-              ? existing.amount.toInt().toString()
-              : existing.amount.toString())
+                ? existing.amount.toInt().toString()
+                : existing.amount.toString())
           : '',
     );
     _txType = existing?.txType ?? TransactionType.expense;
@@ -118,9 +119,8 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
 
     final amount = double.tryParse(_amountController.text.replaceAll(',', ''));
     if (amount == null || amount <= 0) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(strings.invalidAmount)),
-      );
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text(strings.invalidAmount)));
       return;
     }
 
@@ -128,14 +128,14 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
     var participants = const <String>[];
 
     if (!isPersonal) {
-      payerId = _paidByMemberId ??
+      payerId =
+          _paidByMemberId ??
           (availableMembers.isNotEmpty ? availableMembers.first.id : null);
       if (payerId == null) return;
 
       if (_selectedParticipantIds.isEmpty) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(strings.needOneMember)),
-        );
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text(strings.needOneMember)));
         return;
       }
       participants = _selectedParticipantIds.toList();
@@ -143,7 +143,9 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
 
     setState(() => _isSaving = true);
     try {
-      await ref.read(dashboardProvider.notifier).saveTransaction(
+      await ref
+          .read(dashboardProvider.notifier)
+          .saveTransaction(
             existingExpenseId: widget.existingExpense?.id,
             paidByMemberId: payerId,
             txType: isPersonal ? _txType : TransactionType.expense,
@@ -155,6 +157,13 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
           );
       if (mounted) {
         Navigator.of(context).pop();
+      }
+    } catch (e) {
+      final msg = await AppErrorFormatter.formatErrorAsync(e, strings);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(msg)),
+        );
       }
     } finally {
       if (mounted) {
@@ -175,17 +184,23 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
     final selectableMembers = widget.existingExpense == null
         ? activeMembers
         : allMembers
-            .where(
-              (m) =>
-                  m.isActive ||
-                  m.id == widget.existingExpense!.paidByMemberId ||
-                  _selectedParticipantIds.contains(m.id),
-            )
-            .toList();
+              .where(
+                (m) =>
+                    m.isActive ||
+                    m.id == widget.existingExpense!.paidByMemberId ||
+                    _selectedParticipantIds.contains(m.id),
+              )
+              .toList();
 
     if (!isPersonal) {
       if (_paidByMemberId == null && selectableMembers.isNotEmpty) {
-        _paidByMemberId = selectableMembers.first.id;
+        final currentUserId = ref.watch(authUserProvider).value?.uid;
+        final myMemberId = dashboard?.memberIdForUser(currentUserId);
+        _paidByMemberId =
+            (myMemberId != null &&
+                selectableMembers.any((m) => m.id == myMemberId))
+            ? myMemberId
+            : selectableMembers.first.id;
       }
       if (widget.existingExpense == null &&
           _selectedParticipantIds.isEmpty &&
@@ -197,16 +212,15 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
     final currency = account?.currencyCode ?? 'MMK';
     final parsedAmount =
         double.tryParse(_amountController.text.replaceAll(',', '')) ?? 0;
-    final perShare = !isPersonal &&
-            _selectedParticipantIds.isNotEmpty &&
-            parsedAmount > 0
+    final perShare =
+        !isPersonal && _selectedParticipantIds.isNotEmpty && parsedAmount > 0
         ? parsedAmount / _selectedParticipantIds.length
         : 0.0;
 
     final categories = isPersonal
         ? (_txType == TransactionType.income
-            ? ExpenseCategory.incomeCategories
-            : ExpenseCategory.personalExpenseCategories)
+              ? ExpenseCategory.incomeCategories
+              : ExpenseCategory.personalExpenseCategories)
         : ExpenseCategory.groupExpenseCategories;
 
     if (!categories.contains(_category)) {
@@ -215,19 +229,19 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
 
     final presets = isPersonal
         ? (_txType == TransactionType.income
-            ? (strings.isBurmese ? _incomePresetsMy : _incomePresetsEn)
-            : (strings.isBurmese
-                ? _personalExpensePresetsMy
-                : _personalExpensePresetsEn))
+              ? (strings.isBurmese ? _incomePresetsMy : _incomePresetsEn)
+              : (strings.isBurmese
+                    ? _personalExpensePresetsMy
+                    : _personalExpensePresetsEn))
         : (strings.isBurmese ? _groupPresetsMy : _groupPresetsEn);
 
     final screenTitle = isPersonal
         ? (widget.existingExpense == null
-            ? strings.addTransaction
-            : strings.editTransaction)
+              ? strings.addTransaction
+              : strings.editTransaction)
         : (widget.existingExpense == null
-            ? strings.addExpense
-            : strings.editExpense);
+              ? strings.addExpense
+              : strings.editExpense);
 
     return Scaffold(
       appBar: AppBar(title: Text(screenTitle)),
@@ -266,12 +280,12 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
             // Amount Input
             TextFormField(
               controller: _amountController,
-              keyboardType:
-                  const TextInputType.numberWithOptions(decimal: true),
+              keyboardType: const TextInputType.numberWithOptions(
+                decimal: true,
+              ),
               autofocus: widget.existingExpense == null,
-              style: Theme.of(context).textTheme.headlineMedium?.copyWith(
-                    fontWeight: FontWeight.bold,
-                  ),
+              style: Theme.of(context).textTheme.headlineMedium
+                  ?.copyWith(fontWeight: FontWeight.bold),
               decoration: InputDecoration(
                 labelText: strings.amountLabel,
                 suffixText: AppFormatters.symbolForCurrency(currency),
@@ -295,8 +309,9 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
                 labelText: strings.titleLabel,
                 prefixIcon: const Icon(Icons.receipt_long_outlined),
               ),
-              validator: (v) =>
-                  (v == null || v.trim().isEmpty) ? strings.requiredField : null,
+              validator: (v) => (v == null || v.trim().isEmpty)
+                  ? strings.requiredField
+                  : null,
             ),
             const SizedBox(height: 8),
             Wrap(
@@ -316,9 +331,7 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
             if (!isPersonal) ...[
               Text(
                 strings.paidByLabel,
-                style: Theme.of(context)
-                    .textTheme
-                    .titleSmall
+                style: Theme.of(context).textTheme.titleSmall
                     ?.copyWith(fontWeight: FontWeight.bold),
               ),
               const SizedBox(height: 8),
@@ -351,9 +364,7 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
                 children: [
                   Text(
                     strings.splitAmongLabel,
-                    style: Theme.of(context)
-                        .textTheme
-                        .titleSmall
+                    style: Theme.of(context).textTheme.titleSmall
                         ?.copyWith(fontWeight: FontWeight.bold),
                   ),
                   TextButton(
@@ -363,8 +374,9 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
                             selectableMembers.length) {
                           _selectedParticipantIds = {_paidByMemberId!};
                         } else {
-                          _selectedParticipantIds =
-                              selectableMembers.map((m) => m.id).toSet();
+                          _selectedParticipantIds = selectableMembers
+                              .map((m) => m.id)
+                              .toSet();
                         }
                       });
                     },
@@ -397,9 +409,9 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
                 Text(
                   '${strings.perPerson}: ${AppFormatters.formatAmount(perShare, currency)}',
                   style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                        color: Theme.of(context).colorScheme.primary,
-                        fontWeight: FontWeight.w600,
-                      ),
+                    color: Theme.of(context).colorScheme.primary,
+                    fontWeight: FontWeight.w600,
+                  ),
                 ),
               ],
               const SizedBox(height: 18),
@@ -408,9 +420,7 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
             // Category
             Text(
               strings.categoryLabel,
-              style: Theme.of(context)
-                  .textTheme
-                  .titleSmall
+              style: Theme.of(context).textTheme.titleSmall
                   ?.copyWith(fontWeight: FontWeight.bold),
             ),
             const SizedBox(height: 8),
@@ -448,9 +458,9 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
               onPressed: _isSaving
                   ? null
                   : () => _save(
-                        isPersonal: isPersonal,
-                        availableMembers: selectableMembers,
-                      ),
+                      isPersonal: isPersonal,
+                      availableMembers: selectableMembers,
+                    ),
               style: FilledButton.styleFrom(
                 padding: const EdgeInsets.symmetric(vertical: 16),
               ),

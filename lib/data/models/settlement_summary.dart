@@ -24,6 +24,8 @@ class SettlementTransfer {
   final String fromMemberName;
   final String toMemberName;
   final double amount;
+  final bool isPaid;
+  final DateTime? paidAt;
 
   const SettlementTransfer({
     required this.id,
@@ -33,7 +35,26 @@ class SettlementTransfer {
     required this.fromMemberName,
     required this.toMemberName,
     required this.amount,
+    this.isPaid = false,
+    this.paidAt,
   });
+
+  SettlementTransfer copyWith({
+    bool? isPaid,
+    DateTime? paidAt,
+  }) {
+    return SettlementTransfer(
+      id: id,
+      cycleId: cycleId,
+      fromMemberId: fromMemberId,
+      toMemberId: toMemberId,
+      fromMemberName: fromMemberName,
+      toMemberName: toMemberName,
+      amount: amount,
+      isPaid: isPaid ?? this.isPaid,
+      paidAt: paidAt ?? this.paidAt,
+    );
+  }
 
   Map<String, dynamic> toMap() {
     return {
@@ -42,6 +63,8 @@ class SettlementTransfer {
       'from_member_id': fromMemberId,
       'to_member_id': toMemberId,
       'amount': amount,
+      'is_paid': isPaid ? 1 : 0,
+      'paid_at': paidAt?.toIso8601String(),
     };
   }
 }

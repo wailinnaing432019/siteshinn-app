@@ -1,25 +1,33 @@
 package com.siteshinn.site_shinn
 
+import android.content.ActivityNotFoundException
+import android.content.Context
 import android.content.Intent
+import android.content.pm.PackageManager
 import android.media.AudioAttributes
 import android.media.MediaPlayer
 import android.media.RingtoneManager
+import android.net.ConnectivityManager
+import android.net.NetworkCapabilities
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
 import android.provider.Settings
+import androidx.core.content.FileProvider
 import io.flutter.embedding.android.FlutterActivity
 import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.MethodChannel
 import java.io.File
+import java.util.concurrent.Executors
 
 class MainActivity : FlutterActivity() {
     private val channelName = "com.siteshinn.site_shinn/device_settings"
     private var testMediaPlayer: MediaPlayer? = null
     private val mainHandler = Handler(Looper.getMainLooper())
     private val stopPreviewRunnable = Runnable { stopTestSound() }
+    private val pdfExecutor = Executors.newSingleThreadExecutor()
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -104,6 +112,52 @@ class MainActivity : FlutterActivity() {
                     "cancelNativeAlarm" -> {
                         AlarmScheduler.cancelAll(this)
                         result.success(true)
+                    }
+                    "openExportedFile" -> {
+                        val uriStr = call.argument<String>("uri")
+                        val fallbackPath = call.argument<String>("fallbackPath")
+                        val mimeType = call.argument<String>("mimeType") ?: "*/*"
+                        result.success(openExportedFile(uriStr, fallbackPath, mimeType))
+                    }
+                    "isNetworkConnected" -> {
+                        result.success(isNetworkConnected())
+                    }
+                    "getAppVersionInfo" -> {
+                        result.success(getAppVersionInfo())
+                    }
+                    "installApk" -> {
+                        val path = call.argument<String>("path")
+                        if (path.isNullOrBlank()) {
+                            result.error("INVALID_ARGS", "Missing APK path", null)
+                        } else {
+                            result.success(installApk(path))
+                        }
+                    }
+                    "getGoogleWebClientId" -> {
+                        val resId = resources.getIdentifier(
+                            "default_web_client_id",
+                            "string",
+                            packageName
+                        )
+                        result.success(if (resId != 0) getString(resId) else null)
+                    }
+                    "generateReportPdf" -> {
+                        @Suppress("UNCHECKED_CAST")
+                        val payload = call.arguments as? Map<String, Any?>
+                        if (payload == null) {
+                            result.error("INVALID_ARGS", "Missing PDF payload", null)
+                        } else {
+                            pdfExecutor.execute {
+                                try {
+                                    NativePdfGenerator.generateReportPdf(applicationContext, payload)
+                                    mainHandler.post { result.success(true) }
+                                } catch (e: Exception) {
+                                    mainHandler.post {
+                                        result.error("PDF_ERROR", e.message ?: "PDF generation failed", null)
+                                    }
+                                }
+                            }
+                        }
                     }
                     else -> result.notImplemented()
                 }
@@ -203,5 +257,143 @@ class MainActivity : FlutterActivity() {
         )
         intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
         startActivity(intent)
+    }
+
+    private fun openExportedFile(
+        uriStr: String?,
+        fallbackPath: String?,
+        mimeType: String
+    ): Boolean {
+        if (uriStr != null && uriStr.startsWith("content://")) {
+            try {
+                val intent = Intent(Intent.ACTION_VIEW).apply {
+                    setDataAndType(Uri.parse(uriStr), mimeType)
+                    addFlags(
+                        Intent.FLAG_GRANT_READ_URI_PERMISSION or
+                            Intent.FLAG_ACTIVITY_NEW_TASK
+                    )
+                }
+                startActivity(intent)
+                return true
+            } catch (_: Exception) {
+            }
+        }
+
+        val candidatePath = when {
+            fallbackPath != null && File(fallbackPath).exists() -> fallbackPath
+            uriStr != null && !uriStr.startsWith("content://") && File(uriStr).exists() -> uriStr
+            else -> null
+        } ?: return false
+
+        return try {
+            val fileUri = FileProvider.getUriForFile(
+                this,
+                "${packageName}.fileprovider",
+                File(candidatePath)
+            )
+            val intent = Intent(Intent.ACTION_VIEW).apply {
+                setDataAndType(fileUri, mimeType)
+                addFlags(
+                    Intent.FLAG_GRANT_READ_URI_PERMISSION or
+                        Intent.FLAG_ACTIVITY_NEW_TASK
+                )
+            }
+            startActivity(intent)
+            true
+        } catch (_: ActivityNotFoundException) {
+            false
+        } catch (_: Exception) {
+            false
+        }
+    }
+
+    private fun isNetworkConnected(): Boolean {
+        return try {
+            val cm = getSystemService(Context.CONNECTIVITY_SERVICE) as? ConnectivityManager
+                ?: return true
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                val network = cm.activeNetwork ?: return false
+                val caps = cm.getNetworkCapabilities(network) ?: return false
+                caps.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET)
+            } else {
+                @Suppress("DEPRECATION")
+                val info = cm.activeNetworkInfo
+                @Suppress("DEPRECATION")
+                info != null && info.isConnected
+            }
+        } catch (_: Exception) {
+            true
+        }
+    }
+
+    private fun getAppVersionInfo(): Map<String, Any> {
+        return try {
+            val info = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                packageManager.getPackageInfo(
+                    packageName,
+                    PackageManager.PackageInfoFlags.of(0)
+                )
+            } else {
+                @Suppress("DEPRECATION")
+                packageManager.getPackageInfo(packageName, 0)
+            }
+            val code = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+                info.longVersionCode
+            } else {
+                @Suppress("DEPRECATION")
+                info.versionCode.toLong()
+            }
+            mapOf(
+                "versionName" to (info.versionName ?: "2.0.0"),
+                "versionCode" to code,
+                "supportedAbis" to Build.SUPPORTED_ABIS.toList()
+            )
+        } catch (_: Exception) {
+            mapOf(
+                "versionName" to "2.0.0",
+                "versionCode" to 2L,
+                "supportedAbis" to Build.SUPPORTED_ABIS.toList()
+            )
+        }
+    }
+
+    private fun installApk(path: String): String {
+        val file = File(path)
+        if (!file.exists()) return "file_missing"
+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O &&
+            !packageManager.canRequestPackageInstalls()
+        ) {
+            try {
+                val permIntent = Intent(
+                    Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES,
+                    Uri.parse("package:$packageName")
+                ).apply {
+                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                }
+                startActivity(permIntent)
+            } catch (_: Exception) {
+            }
+            return "needs_permission"
+        }
+
+        return try {
+            val apkUri = FileProvider.getUriForFile(
+                this,
+                "${packageName}.fileprovider",
+                file
+            )
+            val intent = Intent(Intent.ACTION_VIEW).apply {
+                setDataAndType(apkUri, "application/vnd.android.package-archive")
+                addFlags(
+                    Intent.FLAG_GRANT_READ_URI_PERMISSION or
+                        Intent.FLAG_ACTIVITY_NEW_TASK
+                )
+            }
+            startActivity(intent)
+            "launched"
+        } catch (_: Exception) {
+            "error"
+        }
     }
 }

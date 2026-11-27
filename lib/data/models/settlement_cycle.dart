@@ -45,15 +45,18 @@ class SettlementCycle {
   }
 
   factory SettlementCycle.fromMap(Map<String, dynamic> map) {
+    final rawSettled = map['is_settled'];
+    final settled =
+        rawSettled is bool ? rawSettled : ((rawSettled as int? ?? 0) == 1);
     return SettlementCycle(
       id: map['id'] as String,
       accountId: map['account_id'] as String,
-      title: map['title'] as String,
+      title: map['title'] as String? ?? '',
       startDate: DateTime.parse(map['start_date'] as String),
       endDate: map['end_date'] != null
           ? DateTime.parse(map['end_date'] as String)
           : null,
-      isSettled: (map['is_settled'] as int? ?? 0) == 1,
+      isSettled: settled,
     );
   }
 }

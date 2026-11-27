@@ -8,6 +8,7 @@ import '../../providers/app_providers.dart';
 import 'accounts_screen.dart';
 import 'add_expense_screen.dart';
 import 'history_screen.dart';
+import 'join_group_screen.dart';
 import 'personal_ledger_view.dart';
 import 'settlement_screen.dart';
 
@@ -166,6 +167,13 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                     const TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
               ),
         actions: [
+          if (dashboard?.isOfflineFallback == true)
+            IconButton(
+              tooltip: strings.retryOnlineBtn,
+              icon: const Icon(Icons.wifi_off_rounded),
+              onPressed: () =>
+                  ref.read(dashboardProvider.notifier).retryOnline(),
+            ),
           TextButton(
             onPressed: () {
               final next = language == AppLanguage.en
@@ -276,6 +284,19 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                   );
                 },
               ),
+              if (ref.read(dashboardProvider).value?.isCloudMode ?? false)
+                ListTile(
+                  leading: const Icon(Icons.group_add_outlined),
+                  title: Text(strings.joinGroupBtn),
+                  onTap: () {
+                    Navigator.of(ctx).pop();
+                    Navigator.of(context).push(
+                      MaterialPageRoute(
+                        builder: (_) => const JoinGroupScreen(),
+                      ),
+                    );
+                  },
+                ),
             ],
           ),
         ),

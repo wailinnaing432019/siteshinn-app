@@ -1,0 +1,55 @@
+{
+  "project_info": {
+    "project_number": "283917312145",
+    "project_id": "siteshinn-dc062",
+    "storage_bucket": "siteshinn-dc062.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:283917312145:android:43cdaa9ab42d9d84961f30",
+        "android_client_info": {
+          "package_name": "com.siteshinn.site_shinn"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "283917312145-79gg3315ho19fgp9leq9gor5hv0dslno.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.siteshinn.site_shinn",
+            "certificate_hash": "bc26225837254e9bac11e888dd268f9c06f21da3"
+          }
+        },
+        {
+          "client_id": "283917312145-d4ah12mnlso0b02tngusm2a1kbe3vf9h.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.siteshinn.site_shinn",
+            "certificate_hash": "0ce497adc048030bd585626e4fa040a861c51669"
+          }
+        },
+        {
+          "client_id": "283917312145-fpmk34tkcnsb9r8gk4jir4lcf1lmjfbb.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCEIR5SidqvHxxWHEMNAznAYwW3I_Pcrmc"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "283917312145-fpmk34tkcnsb9r8gk4jir4lcf1lmjfbb.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

@@ -10,6 +10,7 @@ import '../../data/models/member.dart';
 import '../../data/models/settlement_summary.dart';
 import '../../providers/app_providers.dart';
 import '../../services/excel_export_service.dart';
+import '../../services/export_file_opener.dart';
 import '../../services/pdf_export_service.dart';
 import '../widgets/export_sheet.dart';
 
@@ -60,6 +61,8 @@ class CycleReportView extends StatefulWidget {
   final AppStrings strings;
   final bool isOpenCycle;
   final Future<void> Function()? onCloseCycle;
+  final Future<void> Function(String transferId, bool isPaid)?
+      onToggleTransferPaid;
 
   const CycleReportView({
     super.key,
@@ -69,6 +72,7 @@ class CycleReportView extends StatefulWidget {
     required this.strings,
     required this.isOpenCycle,
     this.onCloseCycle,
+    this.onToggleTransferPaid,
   });
 
   @override
@@ -77,11 +81,12 @@ class CycleReportView extends StatefulWidget {
 
 class _CycleReportViewState extends State<CycleReportView> {
   bool _isExporting = false;
+  final Set<int> _expandedTransferIndices = <int>{};
 
   Future<void> _runExportSheet({
     required String title,
     required Future<void> Function() onShare,
-    required Future<bool> Function() onSaveToDevice,
+    required Future<SavedExportResult?> Function() onSaveToDevice,
   }) async {
     setState(() => _isExporting = true);
     try {
@@ -283,78 +288,172 @@ class _CycleReportViewState extends State<CycleReportView> {
             ),
           )
         else
-          ...report.transfers.map(
-            (t) => Card(
+          ...report.transfers.asMap().entries.map((entry) {
+            final index = entry.key;
+            final t = entry.value;
+            final isExpanded = _expandedTransferIndices.contains(index);
+
+            return Card(
               margin: const EdgeInsets.only(bottom: 8),
-              child: Padding(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-                child: Row(
-                  children: [
-                    CircleAvatar(
-                      backgroundColor:
-                          AppTheme.negativeRed.withValues(alpha: 0.12),
-                      foregroundColor: AppTheme.negativeRed,
-                      radius: 18,
-                      child: Text(
-                        t.fromMemberName.isNotEmpty
-                            ? t.fromMemberName[0].toUpperCase()
-                            : '?',
-                        style: const TextStyle(fontWeight: FontWeight.bold),
-                      ),
+              clipBehavior: Clip.antiAlias,
+              child: Tooltip(
+                message:
+                    '${t.fromMemberName} → ${t.toMemberName} (${AppFormatters.formatAmount(t.amount, currency)})',
+                child: InkWell(
+                  onTap: () {
+                    setState(() {
+                      if (isExpanded) {
+                        _expandedTransferIndices.remove(index);
+                      } else {
+                        _expandedTransferIndices.add(index);
+                      }
+                    });
+                  },
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 14,
+                      vertical: 12,
                     ),
-                    const SizedBox(width: 10),
-                    Expanded(
+                    child: AnimatedSize(
+                      duration: const Duration(milliseconds: 180),
+                      curve: Curves.easeOut,
+                      alignment: Alignment.centerLeft,
                       child: Row(
                         children: [
-                          Flexible(
+                          CircleAvatar(
+                            backgroundColor:
+                                AppTheme.negativeRed.withValues(alpha: 0.12),
+                            foregroundColor: AppTheme.negativeRed,
+                            radius: 18,
                             child: Text(
-                              t.fromMemberName,
+                              t.fromMemberName.isNotEmpty
+                                  ? t.fromMemberName[0].toUpperCase()
+                                  : '?',
                               style:
-                                  const TextStyle(fontWeight: FontWeight.w600),
-                              overflow: TextOverflow.ellipsis,
+                                  const TextStyle(fontWeight: FontWeight.bold),
                             ),
                           ),
-                          Padding(
-                            padding: const EdgeInsets.symmetric(horizontal: 6),
-                            child: Icon(
-                              Icons.arrow_forward_rounded,
-                              size: 18,
-                              color: colorScheme.primary,
-                            ),
+                          const SizedBox(width: 10),
+                          Expanded(
+                            child: isExpanded
+                                ? Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    children: [
+                                      Text(
+                                        t.fromMemberName,
+                                        style: const TextStyle(
+                                          fontWeight: FontWeight.w600,
+                                        ),
+                                      ),
+                                      const SizedBox(height: 2),
+                                      Row(
+                                        crossAxisAlignment:
+                                            CrossAxisAlignment.start,
+                                        children: [
+                                          Icon(
+                                            Icons
+                                                .subdirectory_arrow_right_rounded,
+                                            size: 16,
+                                            color: colorScheme.primary,
+                                          ),
+                                          const SizedBox(width: 4),
+                                          Expanded(
+                                            child: Text(
+                                              t.toMemberName,
+                                              style: const TextStyle(
+                                                fontWeight: FontWeight.w600,
+                                              ),
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ],
+                                  )
+                                : Row(
+                                    children: [
+                                      Flexible(
+                                        child: Text(
+                                          t.fromMemberName,
+                                          style: const TextStyle(
+                                            fontWeight: FontWeight.w600,
+                                          ),
+                                          overflow: TextOverflow.ellipsis,
+                                        ),
+                                      ),
+                                      Padding(
+                                        padding: const EdgeInsets.symmetric(
+                                          horizontal: 6,
+                                        ),
+                                        child: Icon(
+                                          Icons.arrow_forward_rounded,
+                                          size: 18,
+                                          color: colorScheme.primary,
+                                        ),
+                                      ),
+                                      Flexible(
+                                        child: Text(
+                                          t.toMemberName,
+                                          style: const TextStyle(
+                                            fontWeight: FontWeight.w600,
+                                          ),
+                                          overflow: TextOverflow.ellipsis,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
                           ),
-                          Flexible(
+                          const SizedBox(width: 8),
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 10,
+                              vertical: 6,
+                            ),
+                            decoration: BoxDecoration(
+                              color: t.isPaid
+                                  ? AppTheme.positiveGreen
+                                      .withValues(alpha: 0.14)
+                                  : colorScheme.primaryContainer,
+                              borderRadius: BorderRadius.circular(10),
+                            ),
                             child: Text(
-                              t.toMemberName,
-                              style:
-                                  const TextStyle(fontWeight: FontWeight.w600),
-                              overflow: TextOverflow.ellipsis,
+                              AppFormatters.formatAmount(t.amount, currency),
+                              style: TextStyle(
+                                fontWeight: FontWeight.bold,
+                                decoration: t.isPaid
+                                    ? TextDecoration.lineThrough
+                                    : null,
+                                color: t.isPaid
+                                    ? AppTheme.positiveGreen
+                                    : colorScheme.onPrimaryContainer,
+                              ),
                             ),
                           ),
+                          if (!widget.isOpenCycle &&
+                              widget.onToggleTransferPaid != null) ...[
+                            const SizedBox(width: 6),
+                            IconButton(
+                              tooltip: strings.markAsPaidHint,
+                              onPressed: () =>
+                                  widget.onToggleTransferPaid!(t.id, !t.isPaid),
+                              icon: Icon(
+                                t.isPaid
+                                    ? Icons.check_circle
+                                    : Icons.radio_button_unchecked,
+                                color: t.isPaid
+                                    ? AppTheme.positiveGreen
+                                    : colorScheme.outline,
+                              ),
+                            ),
+                          ],
                         ],
                       ),
                     ),
-                    const SizedBox(width: 8),
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 10, vertical: 6),
-                      decoration: BoxDecoration(
-                        color: colorScheme.primaryContainer,
-                        borderRadius: BorderRadius.circular(10),
-                      ),
-                      child: Text(
-                        AppFormatters.formatAmount(t.amount, currency),
-                        style: TextStyle(
-                          fontWeight: FontWeight.bold,
-                          color: colorScheme.onPrimaryContainer,
-                        ),
-                      ),
-                    ),
-                  ],
+                  ),
                 ),
               ),
-            ),
-          ),
+            );
+          }),
 
         const SizedBox(height: 20),
 

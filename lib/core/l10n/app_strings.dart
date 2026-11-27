@@ -282,4 +282,105 @@ class AppStrings {
   String get needOneMember => isBurmese ? 'အနည်းဆုံး အဖွဲ့ဝင် ၁ ဦး လိုအပ်ပါသည်' : 'Select at least 1 member';
   String get needTwoMembers =>
       isBurmese ? 'အနည်းဆုံး အဖွဲ့ဝင် ၂ ဦး ထည့်ပါ' : 'Add at least 2 members to share expenses';
+
+  // Version 2: Auth & Cloud Sync
+  String get signInTitle => isBurmese ? 'အကောင့်ဝင်မည်' : 'Sign In';
+  String get signUpTitle => isBurmese ? 'အကောင့်အသစ် ဖွင့်မည်' : 'Create Account';
+  String get emailLabel => isBurmese ? 'အီးမေးလ် (Email)' : 'Email';
+  String get passwordLabel => isBurmese ? 'စကားဝှက် (Password)' : 'Password';
+  String get displayNameLabel => isBurmese ? 'သင့်အမည်' : 'Your Name';
+  String get continueWithGoogle =>
+      isBurmese ? 'Google ဖြင့် ဝင်မည်' : 'Continue with Google';
+  String get forgotPassword =>
+      isBurmese ? 'စကားဝှက် မေ့နေပါသလား?' : 'Forgot Password?';
+  String get resetPasswordSent => isBurmese
+      ? 'စကားဝှက် ပြန်လည်သတ်မှတ်ရန် link ကို အီးမေးလ်ထဲ ပို့ပြီးပါပြီ။'
+      : 'Password reset link sent to your email.';
+  String get checkEmailConfirm => isBurmese
+      ? 'အကောင့်အတည်ပြုရန် သင့်အီးမေးလ်ကို စစ်ဆေးပါ (သို့) Login ဝင်ကြည့်ပါ။'
+      : 'Please check your email to confirm your account, or sign in if confirmation is disabled.';
+  String get useOfflineBtn =>
+      isBurmese ? 'အင်တာနက်မသုံးဘဲ Offline အဖြစ်သုံးမည်' : 'Continue Offline (Local Only)';
+  String get signInToSyncBtn =>
+      isBurmese ? 'Cloud Sync သုံးရန် Login ဝင်မည်' : 'Sign In for Cloud Sync';
+  String get logoutBtn => isBurmese ? 'အကောင့်ထွက်မည် (Logout)' : 'Log Out';
+  String get logoutConfirm =>
+      isBurmese ? 'အကောင့်မှ ထွက်လိုပါသလား?' : 'Are you sure you want to log out?';
+  String get cloudSyncedBadge => isBurmese ? 'Cloud Sync ချိတ်ထားသည်' : 'Cloud Synced';
+  String get offlineModeBadge => isBurmese ? 'Offline Local' : 'Offline Mode';
+
+  // Group Invite & Join
+  String get joinGroupBtn => isBurmese ? 'Group ထဲ Join မည်' : 'Join Group';
+  String get inviteCodeLabel => isBurmese ? 'Invite Code (၆ လုံး)' : 'Invite Code';
+  String get inviteCodeCopied =>
+      isBurmese ? 'Invite Code ကို Copy ကူးပြီးပါပြီ။' : 'Invite code copied.';
+  String get shareInviteLabel => isBurmese ? 'Invite Code' : 'Group Invite Code';
+  String get findGroupBtn => isBurmese ? 'Group ရှာမည်' : 'Find Group';
+  String get invalidInviteCode =>
+      isBurmese ? 'Invite Code မှားယွင်းနေပါသည်။' : 'Group not found for that invite code.';
+  String get claimNameHint => isBurmese
+      ? 'Group ထဲရှိ သင့်အမည်ကို ရွေးပါ (သို့) အမည်အသစ်ဖြင့် ဝင်ပါ'
+      : 'Select your name in this group, or join as a new member';
+  String get joinAsNewMember =>
+      isBurmese ? 'အဖွဲ့ဝင်အသစ်အဖြစ် ဝင်မည်' : 'Join as new member';
+  String get joinedGroupToast =>
+      isBurmese ? 'Group ထဲသို့ ဝင်ရောက်ပြီးပါပြီ။' : 'Joined group successfully!';
+  String get youBadge => isBurmese ? 'သင်' : 'You';
+
+  // Migration & Transfer Paid
+  String get migrateV1Title =>
+      isBurmese ? 'V1 Local စာရင်းဟောင်းများကို Cloud တင်မည်' : 'Upload Local V1 Data to Cloud';
+  String migrateV1Body(int count) => isBurmese
+      ? 'ဖုန်းထဲတွင် သိမ်းထားသော အကောင့် $count ခု တွေ့ရှိပါသည်။ Cloud ထဲသို့ တစ်ခါတည်း ရွှေ့သိမ်းမည်လား?'
+      : 'Found $count local account(s) on this device. Upload them to your cloud account?';
+  String get migrateNowBtn => isBurmese ? 'Cloud ထဲတင်မည်' : 'Upload Now';
+  String get migratedToast =>
+      isBurmese ? 'Local စာရင်းများ Cloud ထဲသို့ တင်ပြီးပါပြီ။' : 'Local data uploaded to cloud!';
+  String get markPaidLabel => isBurmese ? 'ပေးပြီး' : 'Paid';
+  String get markAsPaidHint => isBurmese ? 'ပေးပြီးကြောင်း မှတ်ရန်' : 'Tap to mark paid';
+
+  // Offline & Friendly Error Messages
+  String get offlineNetworkError => isBurmese
+      ? 'အင်တာနက် ချိတ်ဆက်မှု မရှိပါ (Offline ဖြစ်နေပါသည်)။'
+      : 'You are offline. Please check your internet connection.';
+  String get serverUnreachableError => isBurmese
+      ? 'ဆာဗာ (Google/Firebase) သို့ ချိတ်ဆက်၍ မရပါ။ လက်ရှိ Wi-Fi တွင် VPN ဖွင့်ပြီး ထပ်စမ်းကြည့်ပါ (သို့) Offline ဖြင့် သုံးနိုင်ပါသည်။'
+      : 'Cannot reach Google/Firebase on this network. Please try enabling a VPN or switching networks.';
+  String get offlineBannerText => isBurmese
+      ? 'အင်တာနက် မရှိသဖြင့် Offline Local Mode ဖြင့် အလုပ်လုပ်နေပါသည်'
+      : 'Offline detected — running in local offline mode.';
+  String get retryOnlineBtn => isBurmese ? 'Online ပြန်စမ်းမည်' : 'Retry Online';
+  String get retryBtn => isBurmese ? 'ထပ်စမ်းမည်' : 'Retry';
+  String get signInCancelled => isBurmese
+      ? 'Google Login ကို ပယ်ဖျက်လိုက်ပါသည်။'
+      : 'Google Sign-In was cancelled.';
+  String get openBtn => isBurmese ? 'ဖွင့်မည်' : 'Open';
+  String get noAppToOpenFile => isBurmese
+      ? 'ဤဖိုင်ကို ဖွင့်နိုင်သော App မတွေ့ပါ။ Share မှတစ်ဆင့် ဖွင့်ကြည့်ပါ။'
+      : 'No app found to open this file. Try Share instead.';
+
+  // User Guide & In-App Update
+  String get userGuideTitle => isBurmese ? 'အသုံးပြုနည်း (User Guide)' : 'User Guide';
+  String get userGuideSubtitle => isBurmese
+      ? 'Group စာရင်းခွဲနည်း၊ Personal Wallet၊ Sync နှင့် Export လမ်းညွှန်'
+      : 'How to use group splits, personal wallet, sync, exports & alarms';
+  String get checkUpdateBtn => isBurmese ? 'Update စစ်ဆေးမည်' : 'Check for Updates';
+  String get checkingUpdates => isBurmese ? 'Update စစ်ဆေးနေသည်...' : 'Checking for updates...';
+  String get upToDateToast =>
+      isBurmese ? 'နောက်ဆုံး Version ဖြစ်နေပါပြီ။' : 'You are using the latest version.';
+  String get updateAvailableTitle =>
+      isBurmese ? 'App Update အသစ် ရှိပါသည်' : 'App Update Available';
+  String updateVersionRow(String current, String latest) => isBurmese
+      ? 'လက်ရှိ: v$current  →  အသစ်: v$latest'
+      : 'Current: v$current  →  Latest: v$latest';
+  String get releaseNotesLabel => isBurmese ? 'အသစ်ပါဝင်ချက်များ' : "What's New";
+  String get updateNowBtn => isBurmese ? 'Update တင်မည်' : 'Update Now';
+  String get laterBtn => isBurmese ? 'နောက်မှ' : 'Later';
+  String get downloadingUpdate => isBurmese ? 'APK Download ဆွဲနေသည်...' : 'Downloading APK...';
+  String get allowInstallUnknownApps => isBurmese
+      ? 'App တင်ခွင့်ပြုရန် "Allow from this source" ကို ဖွင့်ပေးပြီးနောက် Update တင်မည် ကို ထပ်နှိပ်ပါ။'
+      : 'Enable "Allow from this source" in Settings, then tap Update Now again.';
+  String get updateFailed => isBurmese
+      ? 'Update Download မအောင်မြင်ပါ။ အင်တာနက်စစ်ဆေးပြီး ထပ်စမ်းကြည့်ပါ။'
+      : 'Update download failed. Please check your connection and try again.';
 }

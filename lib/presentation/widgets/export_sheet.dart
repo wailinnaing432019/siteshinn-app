@@ -1,14 +1,16 @@
 import 'package:flutter/material.dart';
 
 import '../../core/l10n/app_strings.dart';
+import '../../services/export_file_opener.dart';
 
 Future<void> showExportOptionsSheet({
   required BuildContext context,
   required AppStrings strings,
   required String title,
   required Future<void> Function() onShare,
-  required Future<bool> Function() onSaveToDevice,
+  required Future<SavedExportResult?> Function() onSaveToDevice,
 }) async {
+  final messenger = ScaffoldMessenger.of(context);
   final action = await showModalBottomSheet<String>(
     context: context,
     showDragHandle: true,
@@ -47,24 +49,37 @@ Future<void> showExportOptionsSheet({
     ),
   );
 
-  if (!context.mounted || action == null) return;
+  if (action == null) return;
 
   try {
     if (action == 'share') {
-      await onShare();
+      await onShare().timeout(const Duration(seconds: 30));
     } else if (action == 'save') {
       final saved = await onSaveToDevice();
-      if (saved && context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(strings.savedToDeviceToast)),
+      if (saved != null) {
+        messenger.clearSnackBars();
+        messenger.showSnackBar(
+          SnackBar(
+            duration: const Duration(seconds: 8),
+            content: Text('${strings.savedToDeviceToast} (${saved.fileName})'),
+            action: SnackBarAction(
+              label: strings.openBtn,
+              onPressed: () async {
+                final ok = await ExportFileOpener.open(saved);
+                if (!ok) {
+                  messenger.showSnackBar(
+                    SnackBar(content: Text(strings.noAppToOpenFile)),
+                  );
+                }
+              },
+            ),
+          ),
         );
       }
     }
   } catch (e) {
-    if (context.mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('${strings.exportFailed}: $e')),
-      );
-    }
+    messenger.showSnackBar(
+      SnackBar(content: Text('${strings.exportFailed}: $e')),
+    );
   }
 }
