@@ -43,12 +43,18 @@ class PdfExportService {
         )
         .toList();
 
+    final hasAdvances = report.balances.any(
+      (b) => b.advanceGiven > 0 || b.advanceReceived > 0,
+    );
+
     final balanceRows = report.balances
         .map(
           (b) => [
             b.member.name,
             AppFormatters.formatAmount(b.totalPaid, currency),
             AppFormatters.formatAmount(b.totalShare, currency),
+            if (hasAdvances)
+              AppFormatters.formatSignedAmount(b.advanceNet, currency),
             AppFormatters.formatSignedAmount(b.netBalance, currency),
           ],
         )
@@ -56,11 +62,16 @@ class PdfExportService {
 
     final expenseRows = report.expenses.map((e) {
       final payerName = memberById[e.paidByMemberId]?.name ?? 'Unknown';
+      final categoryLabel =
+          e.isAdvance ? strings.advanceLabel : strings.categoryName(e.category);
+      final whoLabel = e.isAdvance && e.splits.isNotEmpty
+          ? '$payerName → ${memberById[e.splits.first.memberId]?.name ?? 'Unknown'}'
+          : payerName;
       return [
         AppFormatters.formatShortDate(e.expenseDate),
         e.title,
-        strings.categoryName(e.category),
-        payerName,
+        categoryLabel,
+        whoLabel,
         AppFormatters.formatAmount(e.amount, currency),
       ];
     }).toList();
@@ -88,10 +99,15 @@ class PdfExportService {
             'Member',
             strings.totalPaid,
             strings.fairShare,
+            if (hasAdvances) strings.advanceNetLabel,
             strings.netBalance,
           ],
-          'alignments': ['left', 'right', 'right', 'right'],
-          'weights': [2.2, 1.5, 1.5, 1.5],
+          'alignments': hasAdvances
+              ? ['left', 'right', 'right', 'right', 'right']
+              : ['left', 'right', 'right', 'right'],
+          'weights': hasAdvances
+              ? [1.9, 1.3, 1.3, 1.3, 1.3]
+              : [2.2, 1.5, 1.5, 1.5],
           'rows': balanceRows,
         },
         {

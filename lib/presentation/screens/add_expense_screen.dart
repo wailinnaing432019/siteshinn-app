@@ -24,8 +24,20 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
   late ExpenseCategory _category;
   late DateTime _expenseDate;
   String? _paidByMemberId;
+  String? _advanceToMemberId;
   late Set<String> _selectedParticipantIds;
   bool _isSaving = false;
+
+  static const _advancePresetsEn = [
+    'Grocery advance',
+    'Common fund',
+    'Mid-cycle payment',
+  ];
+  static const _advancePresetsMy = [
+    'ဈေးဖိုးကြိုပေးငွေ',
+    'ဘုံငွေထည့်ငွေ',
+    'ကြားဖြတ်ပြန်ဆပ်ငွေ',
+  ];
 
   static const _groupPresetsEn = [
     'Groceries',
@@ -86,6 +98,10 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
     _category = existing?.category ?? ExpenseCategory.food;
     _expenseDate = existing?.expenseDate ?? DateTime.now();
     _paidByMemberId = existing?.paidByMemberId;
+    _advanceToMemberId =
+        existing != null && existing.isAdvance && existing.splits.isNotEmpty
+            ? existing.splits.first.memberId
+            : null;
     _selectedParticipantIds = existing != null && existing.splits.isNotEmpty
         ? existing.splits.map((s) => s.memberId).toSet()
         : <String>{};
@@ -126,6 +142,8 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
 
     String? payerId;
     var participants = const <String>[];
+    final isGroupAdvance = !isPersonal && _txType == TransactionType.advance;
+    final rawTitle = _titleController.text.trim();
 
     if (!isPersonal) {
       payerId =
@@ -133,12 +151,23 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
           (availableMembers.isNotEmpty ? availableMembers.first.id : null);
       if (payerId == null) return;
 
-      if (_selectedParticipantIds.isEmpty) {
-        ScaffoldMessenger.of(context)
-            .showSnackBar(SnackBar(content: Text(strings.needOneMember)));
-        return;
+      if (isGroupAdvance) {
+        final receiverId = _advanceToMemberId;
+        if (receiverId == null || receiverId == payerId) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text(strings.sameMemberAdvanceError)),
+          );
+          return;
+        }
+        participants = [receiverId];
+      } else {
+        if (_selectedParticipantIds.isEmpty) {
+          ScaffoldMessenger.of(context)
+              .showSnackBar(SnackBar(content: Text(strings.needOneMember)));
+          return;
+        }
+        participants = _selectedParticipantIds.toList();
       }
-      participants = _selectedParticipantIds.toList();
     }
 
     setState(() => _isSaving = true);
@@ -148,9 +177,15 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
           .saveTransaction(
             existingExpenseId: widget.existingExpense?.id,
             paidByMemberId: payerId,
-            txType: isPersonal ? _txType : TransactionType.expense,
-            title: _titleController.text.trim(),
-            category: _category,
+            txType: isPersonal
+                ? _txType
+                : (isGroupAdvance
+                      ? TransactionType.advance
+                      : TransactionType.expense),
+            title: isGroupAdvance && rawTitle.isEmpty
+                ? strings.advanceDefaultTitle
+                : rawTitle,
+            category: isGroupAdvance ? ExpenseCategory.other : _category,
             amount: amount,
             expenseDate: _expenseDate,
             participantIds: participants,
@@ -202,6 +237,15 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
             ? myMemberId
             : selectableMembers.first.id;
       }
+      if ((_advanceToMemberId == null || _advanceToMemberId == _paidByMemberId) &&
+          selectableMembers.length > 1) {
+        _advanceToMemberId = selectableMembers
+            .firstWhere(
+              (m) => m.id != _paidByMemberId,
+              orElse: () => selectableMembers.first,
+            )
+            .id;
+      }
       if (widget.existingExpense == null &&
           _selectedParticipantIds.isEmpty &&
           activeMembers.isNotEmpty) {
@@ -209,11 +253,14 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
       }
     }
 
+    final isGroupAdvance = !isPersonal && _txType == TransactionType.advance;
     final currency = account?.currencyCode ?? 'MMK';
     final parsedAmount =
         double.tryParse(_amountController.text.replaceAll(',', '')) ?? 0;
-    final perShare =
-        !isPersonal && _selectedParticipantIds.isNotEmpty && parsedAmount > 0
+    final perShare = !isPersonal &&
+            !isGroupAdvance &&
+            _selectedParticipantIds.isNotEmpty &&
+            parsedAmount > 0
         ? parsedAmount / _selectedParticipantIds.length
         : 0.0;
 
@@ -233,15 +280,21 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
               : (strings.isBurmese
                     ? _personalExpensePresetsMy
                     : _personalExpensePresetsEn))
-        : (strings.isBurmese ? _groupPresetsMy : _groupPresetsEn);
+        : (isGroupAdvance
+              ? (strings.isBurmese ? _advancePresetsMy : _advancePresetsEn)
+              : (strings.isBurmese ? _groupPresetsMy : _groupPresetsEn));
 
     final screenTitle = isPersonal
         ? (widget.existingExpense == null
               ? strings.addTransaction
               : strings.editTransaction)
-        : (widget.existingExpense == null
-              ? strings.addExpense
-              : strings.editExpense);
+        : (isGroupAdvance
+              ? (widget.existingExpense == null
+                    ? strings.addAdvance
+                    : strings.editAdvance)
+              : (widget.existingExpense == null
+                    ? strings.addExpense
+                    : strings.editExpense));
 
     return Scaffold(
       appBar: AppBar(title: Text(screenTitle)),
@@ -274,6 +327,58 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
                   });
                 },
               ),
+              const SizedBox(height: 16),
+            ] else ...[
+              SegmentedButton<TransactionType>(
+                segments: [
+                  ButtonSegment(
+                    value: TransactionType.expense,
+                    icon: const Icon(Icons.receipt_long_outlined, size: 18),
+                    label: Text(strings.expenseLabel),
+                  ),
+                  ButtonSegment(
+                    value: TransactionType.advance,
+                    icon: const Icon(Icons.swap_horiz_rounded, size: 18),
+                    label: Text(strings.advanceLabel),
+                  ),
+                ],
+                selected: {_txType == TransactionType.advance
+                    ? TransactionType.advance
+                    : TransactionType.expense},
+                onSelectionChanged: (sel) {
+                  setState(() => _txType = sel.first);
+                },
+              ),
+              if (isGroupAdvance) ...[
+                const SizedBox(height: 12),
+                Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: Theme.of(context)
+                        .colorScheme
+                        .primaryContainer
+                        .withValues(alpha: 0.45),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Icon(
+                        Icons.info_outline_rounded,
+                        size: 18,
+                        color: Theme.of(context).colorScheme.primary,
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          strings.advanceInfoNote,
+                          style: Theme.of(context).textTheme.bodySmall,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
               const SizedBox(height: 16),
             ],
 
@@ -309,9 +414,12 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
                 labelText: strings.titleLabel,
                 prefixIcon: const Icon(Icons.receipt_long_outlined),
               ),
-              validator: (v) => (v == null || v.trim().isEmpty)
-                  ? strings.requiredField
-                  : null,
+              validator: (v) {
+                if (isGroupAdvance) return null;
+                return (v == null || v.trim().isEmpty)
+                    ? strings.requiredField
+                    : null;
+              },
             ),
             const SizedBox(height: 8),
             Wrap(
@@ -330,7 +438,7 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
 
             if (!isPersonal) ...[
               Text(
-                strings.paidByLabel,
+                isGroupAdvance ? strings.fromMemberLabel : strings.paidByLabel,
                 style: Theme.of(context).textTheme.titleSmall
                     ?.copyWith(fontWeight: FontWeight.bold),
               ),
@@ -353,89 +461,137 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
                     label: Text(member.name),
                     selected: selected,
                     onSelected: (_) {
-                      setState(() => _paidByMemberId = member.id);
+                      setState(() {
+                        final prevFrom = _paidByMemberId;
+                        _paidByMemberId = member.id;
+                        if (isGroupAdvance && _advanceToMemberId == member.id) {
+                          _advanceToMemberId = prevFrom != member.id
+                              ? prevFrom
+                              : selectableMembers
+                                  .where((m) => m.id != member.id)
+                                  .firstOrNull
+                                  ?.id;
+                        }
+                      });
                     },
                   );
                 }).toList(),
               ),
               const SizedBox(height: 18),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
+              if (isGroupAdvance) ...[
+                Text(
+                  strings.toMemberLabel,
+                  style: Theme.of(context).textTheme.titleSmall
+                      ?.copyWith(fontWeight: FontWeight.bold),
+                ),
+                const SizedBox(height: 8),
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: selectableMembers.map((member) {
+                    final selected = _advanceToMemberId == member.id;
+                    return ChoiceChip(
+                      avatar: CircleAvatar(
+                        radius: 11,
+                        child: Text(
+                          member.name.isNotEmpty
+                              ? member.name[0].toUpperCase()
+                              : '?',
+                          style: const TextStyle(fontSize: 11),
+                        ),
+                      ),
+                      label: Text(member.name),
+                      selected: selected,
+                      onSelected: member.id == _paidByMemberId
+                          ? null
+                          : (_) {
+                              setState(() => _advanceToMemberId = member.id);
+                            },
+                    );
+                  }).toList(),
+                ),
+                const SizedBox(height: 18),
+              ] else ...[
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text(
+                      strings.splitAmongLabel,
+                      style: Theme.of(context).textTheme.titleSmall
+                          ?.copyWith(fontWeight: FontWeight.bold),
+                    ),
+                    TextButton(
+                      onPressed: () {
+                        setState(() {
+                          if (_selectedParticipantIds.length ==
+                              selectableMembers.length) {
+                            _selectedParticipantIds = {_paidByMemberId!};
+                          } else {
+                            _selectedParticipantIds = selectableMembers
+                                .map((m) => m.id)
+                                .toSet();
+                          }
+                        });
+                      },
+                      child: Text(strings.selectAllMembers),
+                    ),
+                  ],
+                ),
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: selectableMembers.map((member) {
+                    final selected = _selectedParticipantIds.contains(member.id);
+                    return FilterChip(
+                      label: Text(member.name),
+                      selected: selected,
+                      onSelected: (value) {
+                        setState(() {
+                          if (value) {
+                            _selectedParticipantIds.add(member.id);
+                          } else {
+                            _selectedParticipantIds.remove(member.id);
+                          }
+                        });
+                      },
+                    );
+                  }).toList(),
+                ),
+                if (perShare > 0) ...[
+                  const SizedBox(height: 8),
                   Text(
-                    strings.splitAmongLabel,
-                    style: Theme.of(context).textTheme.titleSmall
-                        ?.copyWith(fontWeight: FontWeight.bold),
-                  ),
-                  TextButton(
-                    onPressed: () {
-                      setState(() {
-                        if (_selectedParticipantIds.length ==
-                            selectableMembers.length) {
-                          _selectedParticipantIds = {_paidByMemberId!};
-                        } else {
-                          _selectedParticipantIds = selectableMembers
-                              .map((m) => m.id)
-                              .toSet();
-                        }
-                      });
-                    },
-                    child: Text(strings.selectAllMembers),
+                    '${strings.perPerson}: ${AppFormatters.formatAmount(perShare, currency)}',
+                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                      color: Theme.of(context).colorScheme.primary,
+                      fontWeight: FontWeight.w600,
+                    ),
                   ),
                 ],
+                const SizedBox(height: 18),
+              ],
+            ],
+
+            if (!isGroupAdvance) ...[
+              // Category
+              Text(
+                strings.categoryLabel,
+                style: Theme.of(context).textTheme.titleSmall
+                    ?.copyWith(fontWeight: FontWeight.bold),
               ),
+              const SizedBox(height: 8),
               Wrap(
                 spacing: 8,
                 runSpacing: 8,
-                children: selectableMembers.map((member) {
-                  final selected = _selectedParticipantIds.contains(member.id);
-                  return FilterChip(
-                    label: Text(member.name),
-                    selected: selected,
-                    onSelected: (value) {
-                      setState(() {
-                        if (value) {
-                          _selectedParticipantIds.add(member.id);
-                        } else {
-                          _selectedParticipantIds.remove(member.id);
-                        }
-                      });
-                    },
+                children: categories.map((cat) {
+                  return ChoiceChip(
+                    label: Text(strings.categoryName(cat)),
+                    selected: _category == cat,
+                    onSelected: (_) => setState(() => _category = cat),
                   );
                 }).toList(),
               ),
-              if (perShare > 0) ...[
-                const SizedBox(height: 8),
-                Text(
-                  '${strings.perPerson}: ${AppFormatters.formatAmount(perShare, currency)}',
-                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                    color: Theme.of(context).colorScheme.primary,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-              ],
               const SizedBox(height: 18),
             ],
-
-            // Category
-            Text(
-              strings.categoryLabel,
-              style: Theme.of(context).textTheme.titleSmall
-                  ?.copyWith(fontWeight: FontWeight.bold),
-            ),
-            const SizedBox(height: 8),
-            Wrap(
-              spacing: 8,
-              runSpacing: 8,
-              children: categories.map((cat) {
-                return ChoiceChip(
-                  label: Text(strings.categoryName(cat)),
-                  selected: _category == cat,
-                  onSelected: (_) => setState(() => _category = cat),
-                );
-              }).toList(),
-            ),
-            const SizedBox(height: 18),
 
             // Date Picker
             ListTile(

@@ -6,14 +6,20 @@ class MemberBalance {
   final Member member;
   final double totalPaid;
   final double totalShare;
+  final double advanceGiven;
+  final double advanceReceived;
   final double netBalance;
 
   const MemberBalance({
     required this.member,
     required this.totalPaid,
     required this.totalShare,
+    this.advanceGiven = 0,
+    this.advanceReceived = 0,
     required this.netBalance,
   });
+
+  double get advanceNet => advanceGiven - advanceReceived;
 }
 
 class SettlementTransfer {
@@ -85,6 +91,10 @@ class CycleSettlementReport {
   });
 
   int get activeParticipantCount => balances.length;
+
+  int get expenseCount => expenses.where((e) => !e.isAdvance).length;
+
+  int get advanceCount => expenses.where((e) => e.isAdvance).length;
 
   double get averagePerMember =>
       balances.isEmpty ? 0 : totalExpense / balances.length;

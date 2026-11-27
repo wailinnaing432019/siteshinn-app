@@ -81,7 +81,7 @@ class AnalyticsService {
     var grandTotal = 0.0;
 
     for (final e in expenses) {
-      if (expensesOnly && e.isIncome) continue;
+      if (e.isAdvance || (expensesOnly && e.isIncome)) continue;
       if (e.amount <= 0) continue;
       totals[e.category] = (totals[e.category] ?? 0) + e.amount;
       grandTotal += e.amount;
@@ -109,6 +109,7 @@ class AnalyticsService {
     final expenseByDay = <DateTime, double>{};
 
     for (final e in expenses) {
+      if (e.isAdvance) continue;
       final day = DateTime(
         e.expenseDate.year,
         e.expenseDate.month,

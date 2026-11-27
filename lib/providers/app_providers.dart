@@ -320,6 +320,15 @@ class PersonalDateRangeNotifier extends Notifier<DateTimeRange?> {
     );
   }
 
+  static DateTimeRange last7DaysRange() {
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    return DateTimeRange(
+      start: today.subtract(const Duration(days: 6)),
+      end: today,
+    );
+  }
+
   @override
   DateTimeRange? build() => currentMonthRange();
 
@@ -327,14 +336,7 @@ class PersonalDateRangeNotifier extends Notifier<DateTimeRange?> {
 
   void setThisMonth() => state = currentMonthRange();
 
-  void setLast7Days() {
-    final now = DateTime.now();
-    final today = DateTime(now.year, now.month, now.day);
-    state = DateTimeRange(
-      start: today.subtract(const Duration(days: 6)),
-      end: today,
-    );
-  }
+  void setLast7Days() => state = last7DaysRange();
 
   void setAllTime() => state = null;
 }

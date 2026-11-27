@@ -1,6 +1,7 @@
 enum TransactionType {
   expense('expense'),
-  income('income');
+  income('income'),
+  advance('advance');
 
   final String key;
   const TransactionType(this.key);
@@ -128,6 +129,7 @@ class Expense {
 
   bool get isIncome => txType == TransactionType.income;
   bool get isExpense => txType == TransactionType.expense;
+  bool get isAdvance => txType == TransactionType.advance;
 
   Expense copyWith({
     String? id,

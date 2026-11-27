@@ -80,11 +80,10 @@ class _DateRangeFilterBar extends ConsumerWidget {
   bool _isSameDay(DateTime a, DateTime b) =>
       a.year == b.year && a.month == b.month && a.day == b.day;
 
-  bool _isCurrentMonth(DateTimeRange? range) {
+  bool _matchesRange(DateTimeRange? range, DateTimeRange target) {
     if (range == null) return false;
-    final current = PersonalDateRangeNotifier.currentMonthRange();
-    return _isSameDay(range.start, current.start) &&
-        _isSameDay(range.end, current.end);
+    return _isSameDay(range.start, target.start) &&
+        _isSameDay(range.end, target.end);
   }
 
   Future<void> _pickStartDate(
@@ -152,7 +151,10 @@ class _DateRangeFilterBar extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final strings = ref.watch(appStringsProvider);
     final range = ref.watch(personalDateRangeProvider);
-    final isCurrentMonth = _isCurrentMonth(range);
+    final isCurrentMonth =
+        _matchesRange(range, PersonalDateRangeNotifier.currentMonthRange());
+    final isLast7Days =
+        _matchesRange(range, PersonalDateRangeNotifier.last7DaysRange());
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -221,9 +223,10 @@ class _DateRangeFilterBar extends ConsumerWidget {
               ),
               Padding(
                 padding: const EdgeInsets.only(right: 6),
-                child: ActionChip(
+                child: ChoiceChip(
                   label: Text(strings.last7Days, style: const TextStyle(fontSize: 12)),
-                  onPressed: () =>
+                  selected: isLast7Days,
+                  onSelected: (_) =>
                       ref.read(personalDateRangeProvider.notifier).setLast7Days(),
                 ),
               ),

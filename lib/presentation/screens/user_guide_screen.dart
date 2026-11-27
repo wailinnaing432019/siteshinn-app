@@ -47,8 +47,8 @@ class UserGuideScreen extends ConsumerWidget {
                       children: [
                         Text(
                           isMy
-                              ? 'စိုက်ရှင်း (SiteShinn) v2.1.1'
-                              : 'SiteShinn (စိုက်ရှင်း) v2.1.1',
+                              ? 'စိုက်ရှင်း (SiteShinn) v2.2.0'
+                              : 'SiteShinn (စိုက်ရှင်း) v2.2.0',
                           style: Theme.of(context)
                               .textTheme
                               .titleMedium
@@ -141,6 +141,7 @@ class UserGuideScreen extends ConsumerWidget {
           steps: [
             '"+ Add Expense" နှိပ်ပြီး ခေါင်းစဉ်၊ ပမာဏ၊ Paid By (ပေးသူ) နှင့် Split Among (ပါဝင်ခွဲဝေမည့်သူများ) ကို ရွေးချယ်သိမ်းဆည်းပါ။',
             'လူအချို့သာ ပါဝင်သော စရိတ် (ဥပမာ - ၃ ဦးတည်း) ဖြစ်ပါက Split Among တွင် ထို ၃ ဦးကိုသာ ရွေးပေးနိုင်ပါသည်။',
+            'အဖွဲ့ဝင်တစ်ဦးထံ ကြိုပေးငွေ / ဘုံငွေအိတ် (Advance) ထည့်လိုပါက Add ထဲတွင် "ကြိုပေးငွေ" ကို ရွေးပြီး ပေးသူ (From) နှင့် လက်ခံသူ (To) မှတ်ထားပါက Settle Up ရှင်းတမ်းတွင် အလိုအလျောက် ချိန်ညှိတွက်ချက်ပေးပါမည်။',
             'စာရင်းရှင်းလိုသည့်အခါ "Settle Up" tab တွင် ဘယ်သူက ဘယ်သူ့ကို ဘယ်လောက်ပြန်ပေးရမလဲ အနည်းဆုံးအကြိမ်ဖြင့် တွက်ချက်ပြပေးပါမည်။ နာမည်ရှည်များကို Card ပေါ် နှိပ်၍ အပြည့်ဖတ်နိုင်ပါသည်။',
             'စာရင်းပိတ်ပြီးနောက် "History" tab ထဲတွင် ငွေပေးပြီးသူများကို အမှန်ခြစ် (Paid / ပေးပြီး) မှတ်သားထားနိုင်ပါသည်။',
           ],
@@ -198,6 +199,7 @@ class UserGuideScreen extends ConsumerWidget {
         steps: [
           'Tap "+ Add Expense" to record title, amount, who paid (Paid By), and who shares the cost (Split Among).',
           'You can select all roommates or only specific participants for any item.',
+          'Need to give money in advance to a buyer or common fund holder? Switch to "Advance" when adding an entry to set From (Giver) and To (Receiver) — Settle Up adjusts member balances automatically without inflating total group spending.',
           'In "Settle Up", SiteShinn calculates the minimum transfers ("Who Pays Whom"). Tap any transfer row to expand full member names on narrow screens.',
           'After closing a cycle, open it in "History" to mark transfers as Paid.',
         ],

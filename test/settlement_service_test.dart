@@ -264,4 +264,153 @@ void main() {
       expect(novOnly.filteredTransactions.length, 2);
     });
   });
+
+  group('Member Advances (Pre-payments)', () {
+    test('adjusts net balances and transfers without counting advances as group spending', () {
+      final members = List.generate(
+        4,
+        (i) => Member(
+          id: 'm$i',
+          accountId: 'acc1',
+          name: 'Member $i',
+          createdAt: now,
+        ),
+      );
+      final cycle = makeCycle();
+
+      // m0 paid 60,000 group groceries split 4 ways (15,000 each).
+      // m1 gave m0 a 20,000 advance beforehand.
+      final expenses = [
+        Expense(
+          id: 'e1',
+          accountId: 'acc1',
+          cycleId: 'c1',
+          paidByMemberId: 'm0',
+          title: 'Groceries',
+          category: ExpenseCategory.food,
+          amount: 60000,
+          expenseDate: now,
+          createdAt: now,
+          splits: SettlementService.buildEqualSplits(
+            expenseId: 'e1',
+            amount: 60000,
+            participantIds: ['m0', 'm1', 'm2', 'm3'],
+            currencyCode: 'MMK',
+          ),
+        ),
+        Expense(
+          id: 'adv1',
+          accountId: 'acc1',
+          cycleId: 'c1',
+          paidByMemberId: 'm1',
+          txType: TransactionType.advance,
+          title: 'Grocery advance',
+          category: ExpenseCategory.other,
+          amount: 20000,
+          expenseDate: now,
+          createdAt: now,
+          splits: SettlementService.buildEqualSplits(
+            expenseId: 'adv1',
+            amount: 20000,
+            participantIds: ['m0'],
+            currencyCode: 'MMK',
+          ),
+        ),
+      ];
+
+      final report = SettlementService.calculateReport(
+        cycle: cycle,
+        allMembers: members,
+        expenses: expenses,
+        currencyCode: 'MMK',
+      );
+
+      expect(report.totalExpense, 60000);
+      expect(report.expenseCount, 1);
+      expect(report.advanceCount, 1);
+
+      final byId = {for (final b in report.balances) b.member.id: b};
+      expect(byId['m0']!.netBalance, 25000); // 60k paid - 15k share - 20k adv received
+      expect(byId['m1']!.netBalance, 5000); // 0 paid - 15k share + 20k adv given
+      expect(byId['m1']!.advanceGiven, 20000);
+      expect(byId['m0']!.advanceReceived, 20000);
+      expect(byId['m2']!.netBalance, -15000);
+      expect(byId['m3']!.netBalance, -15000);
+
+      final totalTransferred = report.transfers.fold<double>(
+        0,
+        (sum, t) => sum + t.amount,
+      );
+      expect(totalTransferred, 30000); // 25k to m0 + 5k back to m1
+    });
+
+    test('handles common fund treasurer leftover refund cleanly', () {
+      final members = List.generate(
+        4,
+        (i) => Member(
+          id: 'm$i',
+          accountId: 'acc1',
+          name: 'M$i',
+          createdAt: now,
+        ),
+      );
+      final cycle = makeCycle();
+
+      // m1, m2, m3 each contribute 20,000 into m0's common pot (60,000 held by m0).
+      // m0 spends 60,000 total (15,000 each) -> m0 owes 5,000 back to m1, m2, m3.
+      final expenses = <Expense>[
+        for (final giver in ['m1', 'm2', 'm3'])
+          Expense(
+            id: 'adv_$giver',
+            accountId: 'acc1',
+            cycleId: 'c1',
+            paidByMemberId: giver,
+            txType: TransactionType.advance,
+            title: 'Common fund',
+            category: ExpenseCategory.other,
+            amount: 20000,
+            expenseDate: now,
+            createdAt: now,
+            splits: SettlementService.buildEqualSplits(
+              expenseId: 'adv_$giver',
+              amount: 20000,
+              participantIds: ['m0'],
+              currencyCode: 'MMK',
+            ),
+          ),
+        Expense(
+          id: 'e_pot',
+          accountId: 'acc1',
+          cycleId: 'c1',
+          paidByMemberId: 'm0',
+          title: 'Pot spending',
+          category: ExpenseCategory.food,
+          amount: 60000,
+          expenseDate: now,
+          createdAt: now,
+          splits: SettlementService.buildEqualSplits(
+            expenseId: 'e_pot',
+            amount: 60000,
+            participantIds: ['m0', 'm1', 'm2', 'm3'],
+            currencyCode: 'MMK',
+          ),
+        ),
+      ];
+
+      final report = SettlementService.calculateReport(
+        cycle: cycle,
+        allMembers: members,
+        expenses: expenses,
+        currencyCode: 'MMK',
+      );
+
+      final byId = {for (final b in report.balances) b.member.id: b};
+      expect(byId['m0']!.netBalance, -15000);
+      expect(report.transfers.length, 3);
+      for (final t in report.transfers) {
+        expect(t.fromMemberId, 'm0');
+        expect(t.amount, 5000);
+      }
+    });
+  });
 }

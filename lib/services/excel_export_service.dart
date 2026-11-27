@@ -85,11 +85,15 @@ class ExcelExportService {
     summarySheet.appendRow([]);
 
     // Member Breakdown
+    final hasAdvances = report.balances.any(
+      (b) => b.advanceGiven > 0 || b.advanceReceived > 0,
+    );
     summarySheet.appendRow([TextCellValue(strings.memberBalances)]);
     summarySheet.appendRow([
       TextCellValue('Member'),
       TextCellValue('${strings.totalPaid} ($currency)'),
       TextCellValue('${strings.fairShare} ($currency)'),
+      if (hasAdvances) TextCellValue('${strings.advanceNetLabel} ($currency)'),
       TextCellValue('${strings.netBalance} ($currency)'),
     ]);
     for (final b in report.balances) {
@@ -97,6 +101,7 @@ class ExcelExportService {
         TextCellValue(b.member.name),
         DoubleCellValue(b.totalPaid),
         DoubleCellValue(b.totalShare),
+        if (hasAdvances) DoubleCellValue(b.advanceNet),
         DoubleCellValue(b.netBalance),
       ]);
     }
@@ -119,7 +124,9 @@ class ExcelExportService {
       expensesSheet.appendRow([
         TextCellValue(AppFormatters.formatDate(e.expenseDate)),
         TextCellValue(e.title),
-        TextCellValue(strings.categoryName(e.category)),
+        TextCellValue(
+          e.isAdvance ? strings.advanceLabel : strings.categoryName(e.category),
+        ),
         TextCellValue(payer),
         DoubleCellValue(e.amount),
         TextCellValue(splitNames),

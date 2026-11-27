@@ -400,4 +400,20 @@ class AppStrings {
   String get tapSliceHint => isBurmese
       ? 'အသေးစိတ်ကြည့်ရန် ဂရပ်အပိုင်း/တိုင်များကို ထိကြည့်ပါ'
       : 'Tap chart bars or slices for details';
+
+  // Member Advance / Pre-payment
+  String get advanceLabel => isBurmese ? 'ကြိုပေးငွေ' : 'Advance';
+  String get addAdvance => isBurmese ? 'ကြိုပေးငွေ မှတ်မည်' : 'Record Advance';
+  String get editAdvance => isBurmese ? 'ကြိုပေးငွေ ပြင်ဆင်မည်' : 'Edit Advance';
+  String get fromMemberLabel => isBurmese ? 'ပေးသူ (From)' : 'From (Giver)';
+  String get toMemberLabel => isBurmese ? 'လက်ခံသူ (To)' : 'To (Receiver)';
+  String get sameMemberAdvanceError => isBurmese
+      ? 'ပေးသူနှင့် လက်ခံသူ တူနေ၍ မရပါ။'
+      : 'Giver and receiver must be different members.';
+  String get advanceDefaultTitle => isBurmese ? 'ကြိုပေးငွေ' : 'Member Advance';
+  String get advanceNetLabel => isBurmese ? 'ကြိုပေး/ရ' : 'Advance';
+  String get advancesCountLabel => isBurmese ? 'ကြိုပေးငွေ' : 'Advances';
+  String get advanceInfoNote => isBurmese
+      ? 'ကြိုပေးငွေသည် စုစုပေါင်းအသုံးစရိတ်ထဲ မပေါင်းဘဲ ရှင်းတမ်း (Settle Up) တွက်ချက်ရာတွင်သာ ချိန်ညှိပေးပါမည်။'
+      : 'Advances adjust member balances at Settle Up without adding to total group spending.';
 }

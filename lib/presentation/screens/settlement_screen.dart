@@ -199,9 +199,17 @@ class _CycleReportViewState extends State<CycleReportView> {
                   const SizedBox(width: 24),
                   _MiniStat(
                     label: strings.expensesCount,
-                    value: '${report.expenses.length}',
+                    value: '${report.expenseCount}',
                     color: colorScheme.onPrimary,
                   ),
+                  if (report.advanceCount > 0) ...[
+                    const SizedBox(width: 24),
+                    _MiniStat(
+                      label: strings.advancesCountLabel,
+                      value: '${report.advanceCount}',
+                      color: colorScheme.onPrimary,
+                    ),
+                  ],
                 ],
               ),
             ],
@@ -536,8 +544,12 @@ class _CycleReportViewState extends State<CycleReportView> {
                 style: const TextStyle(fontWeight: FontWeight.w600),
               ),
               subtitle: Text(
-                '${strings.totalPaid}: ${AppFormatters.formatAmount(b.totalPaid, currency)}  •  '
-                '${strings.fairShare}: ${AppFormatters.formatAmount(b.totalShare, currency)}',
+                (b.advanceGiven > 0 || b.advanceReceived > 0)
+                    ? '${strings.totalPaid}: ${AppFormatters.formatAmount(b.totalPaid, currency)}  •  '
+                        '${strings.fairShare}: ${AppFormatters.formatAmount(b.totalShare, currency)}  •  '
+                        '${strings.advanceNetLabel}: ${AppFormatters.formatSignedAmount(b.advanceNet, currency)}'
+                    : '${strings.totalPaid}: ${AppFormatters.formatAmount(b.totalPaid, currency)}  •  '
+                        '${strings.fairShare}: ${AppFormatters.formatAmount(b.totalShare, currency)}',
                 style: const TextStyle(fontSize: 12),
               ),
               trailing: Column(
@@ -575,6 +587,10 @@ class _CycleReportViewState extends State<CycleReportView> {
             final memberById = {for (final m in widget.allMembers) m.id: m};
             final payerName =
                 memberById[expense.paidByMemberId]?.name ?? 'Unknown';
+            final isAdvance = expense.isAdvance;
+            final receiverName = isAdvance && expense.splits.isNotEmpty
+                ? (memberById[expense.splits.first.memberId]?.name ?? 'Unknown')
+                : '';
             final splitCount = expense.splits.isNotEmpty
                 ? expense.splits.length
                 : widget.allMembers.length;
@@ -583,25 +599,65 @@ class _CycleReportViewState extends State<CycleReportView> {
               margin: const EdgeInsets.only(bottom: 8),
               child: ListTile(
                 leading: CircleAvatar(
-                  backgroundColor: colorScheme.primaryContainer,
-                  foregroundColor: colorScheme.onPrimaryContainer,
-                  child: Icon(iconForExpenseCategory(expense.category), size: 20),
+                  backgroundColor: isAdvance
+                      ? colorScheme.secondaryContainer
+                      : colorScheme.primaryContainer,
+                  foregroundColor: isAdvance
+                      ? colorScheme.onSecondaryContainer
+                      : colorScheme.onPrimaryContainer,
+                  child: Icon(
+                    isAdvance
+                        ? Icons.swap_horiz_rounded
+                        : iconForExpenseCategory(expense.category),
+                    size: 20,
+                  ),
                 ),
-                title: Text(
-                  expense.title,
-                  style: const TextStyle(fontWeight: FontWeight.w600),
+                title: Row(
+                  children: [
+                    Flexible(
+                      child: Text(
+                        expense.title,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(fontWeight: FontWeight.w600),
+                      ),
+                    ),
+                    if (isAdvance) ...[
+                      const SizedBox(width: 6),
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 6,
+                          vertical: 2,
+                        ),
+                        decoration: BoxDecoration(
+                          color: colorScheme.secondaryContainer,
+                          borderRadius: BorderRadius.circular(6),
+                        ),
+                        child: Text(
+                          strings.advanceLabel,
+                          style: TextStyle(
+                            fontSize: 10,
+                            fontWeight: FontWeight.w700,
+                            color: colorScheme.onSecondaryContainer,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ],
                 ),
                 subtitle: Text(
-                  '${strings.paidByLabel}: $payerName  •  '
-                  '${strings.splitSummary(splitCount, report.balances.length)}  •  '
-                  '${AppFormatters.formatShortDate(expense.expenseDate)}',
+                  isAdvance
+                      ? '$payerName → $receiverName  •  ${AppFormatters.formatShortDate(expense.expenseDate)}'
+                      : '${strings.paidByLabel}: $payerName  •  '
+                          '${strings.splitSummary(splitCount, report.balances.length)}  •  '
+                          '${AppFormatters.formatShortDate(expense.expenseDate)}',
                   style: const TextStyle(fontSize: 12),
                 ),
                 trailing: Text(
                   AppFormatters.formatAmount(expense.amount, currency),
-                  style: const TextStyle(
+                  style: TextStyle(
                     fontWeight: FontWeight.bold,
                     fontSize: 14,
+                    color: isAdvance ? colorScheme.primary : null,
                   ),
                 ),
               ),

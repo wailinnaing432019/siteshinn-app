@@ -81,13 +81,33 @@ class SettlementService {
     final shareUnitsByMember = <String, int>{
       for (final m in relevantMembers) m.id: 0,
     };
+    final advanceGivenUnitsByMember = <String, int>{
+      for (final m in relevantMembers) m.id: 0,
+    };
+    final advanceReceivedUnitsByMember = <String, int>{
+      for (final m in relevantMembers) m.id: 0,
+    };
 
     var totalUnits = 0;
 
     for (final expense in expenses) {
       final expenseUnits = toMinorUnits(expense.amount, currencyCode);
-      totalUnits += expenseUnits;
       final payerId = expense.paidByMemberId;
+
+      if (expense.isAdvance) {
+        if (payerId != null) {
+          advanceGivenUnitsByMember[payerId] =
+              (advanceGivenUnitsByMember[payerId] ?? 0) + expenseUnits;
+        }
+        for (final split in expense.splits) {
+          advanceReceivedUnitsByMember[split.memberId] =
+              (advanceReceivedUnitsByMember[split.memberId] ?? 0) +
+              toMinorUnits(split.shareAmount, currencyCode);
+        }
+        continue;
+      }
+
+      totalUnits += expenseUnits;
       if (payerId != null) {
         paidUnitsByMember[payerId] =
             (paidUnitsByMember[payerId] ?? 0) + expenseUnits;
@@ -121,7 +141,9 @@ class SettlementService {
     for (final member in relevantMembers) {
       final paid = paidUnitsByMember[member.id] ?? 0;
       final share = shareUnitsByMember[member.id] ?? 0;
-      final net = paid - share;
+      final advGiven = advanceGivenUnitsByMember[member.id] ?? 0;
+      final advReceived = advanceReceivedUnitsByMember[member.id] ?? 0;
+      final net = (paid - share) + (advGiven - advReceived);
       netUnitsByMember[member.id] = net;
 
       balances.add(
@@ -129,6 +151,8 @@ class SettlementService {
           member: member,
           totalPaid: fromMinorUnits(paid, currencyCode),
           totalShare: fromMinorUnits(share, currencyCode),
+          advanceGiven: fromMinorUnits(advGiven, currencyCode),
+          advanceReceived: fromMinorUnits(advReceived, currencyCode),
           netBalance: fromMinorUnits(net, currencyCode),
         ),
       );

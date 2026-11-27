@@ -331,14 +331,23 @@ class _ExpensesTabState extends ConsumerState<_ExpensesTab> {
     final colorScheme = Theme.of(context).colorScheme;
 
     final filtered = expenses.where((e) {
-      if (_filterMemberId != null && e.paidByMemberId != _filterMemberId) {
-        return false;
+      if (_filterMemberId != null) {
+        final involvedInAdvance =
+            e.isAdvance && e.splits.any((s) => s.memberId == _filterMemberId);
+        if (e.paidByMemberId != _filterMemberId && !involvedInAdvance) {
+          return false;
+        }
       }
       if (_searchQuery.isNotEmpty) {
         final q = _searchQuery.toLowerCase();
         final payerName =
             (memberById[e.paidByMemberId]?.name ?? '').toLowerCase();
-        return e.title.toLowerCase().contains(q) || payerName.contains(q);
+        final receiverName = e.isAdvance && e.splits.isNotEmpty
+            ? (memberById[e.splits.first.memberId]?.name ?? '').toLowerCase()
+            : '';
+        return e.title.toLowerCase().contains(q) ||
+            payerName.contains(q) ||
+            receiverName.contains(q);
       }
       return true;
     }).toList();
@@ -491,6 +500,11 @@ class _ExpensesTabState extends ConsumerState<_ExpensesTab> {
                     final expense = filtered[index];
                     final payerName =
                         memberById[expense.paidByMemberId]?.name ?? 'Unknown';
+                    final isAdvance = expense.isAdvance;
+                    final receiverName = isAdvance && expense.splits.isNotEmpty
+                        ? (memberById[expense.splits.first.memberId]?.name ??
+                              'Unknown')
+                        : '';
                     final splitCount = expense.splits.isNotEmpty
                         ? expense.splits.length
                         : activeMembers.length;
@@ -499,16 +513,57 @@ class _ExpensesTabState extends ConsumerState<_ExpensesTab> {
                       margin: const EdgeInsets.only(bottom: 8),
                       child: ListTile(
                         leading: CircleAvatar(
-                          backgroundColor: colorScheme.primaryContainer,
-                          foregroundColor: colorScheme.onPrimaryContainer,
-                          child: Icon(iconForExpenseCategory(expense.category), size: 20),
+                          backgroundColor: isAdvance
+                              ? colorScheme.secondaryContainer
+                              : colorScheme.primaryContainer,
+                          foregroundColor: isAdvance
+                              ? colorScheme.onSecondaryContainer
+                              : colorScheme.onPrimaryContainer,
+                          child: Icon(
+                            isAdvance
+                                ? Icons.swap_horiz_rounded
+                                : iconForExpenseCategory(expense.category),
+                            size: 20,
+                          ),
                         ),
-                        title: Text(
-                          expense.title,
-                          style: const TextStyle(fontWeight: FontWeight.w600),
+                        title: Row(
+                          children: [
+                            Flexible(
+                              child: Text(
+                                expense.title,
+                                overflow: TextOverflow.ellipsis,
+                                style: const TextStyle(
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                            ),
+                            if (isAdvance) ...[
+                              const SizedBox(width: 6),
+                              Container(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 6,
+                                  vertical: 2,
+                                ),
+                                decoration: BoxDecoration(
+                                  color: colorScheme.secondaryContainer,
+                                  borderRadius: BorderRadius.circular(6),
+                                ),
+                                child: Text(
+                                  strings.advanceLabel,
+                                  style: TextStyle(
+                                    fontSize: 10,
+                                    fontWeight: FontWeight.w700,
+                                    color: colorScheme.onSecondaryContainer,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ],
                         ),
                         subtitle: Text(
-                          '${strings.paidByLabel}: $payerName  •  ${strings.splitSummary(splitCount, activeMembers.length)}  •  ${AppFormatters.formatShortDate(expense.expenseDate)}',
+                          isAdvance
+                              ? '$payerName → $receiverName  •  ${AppFormatters.formatShortDate(expense.expenseDate)}'
+                              : '${strings.paidByLabel}: $payerName  •  ${strings.splitSummary(splitCount, activeMembers.length)}  •  ${AppFormatters.formatShortDate(expense.expenseDate)}',
                           style: const TextStyle(fontSize: 12),
                         ),
                         trailing: Row(
@@ -519,9 +574,10 @@ class _ExpensesTabState extends ConsumerState<_ExpensesTab> {
                                 expense.amount,
                                 currency,
                               ),
-                              style: const TextStyle(
+                              style: TextStyle(
                                 fontWeight: FontWeight.bold,
                                 fontSize: 14,
+                                color: isAdvance ? colorScheme.primary : null,
                               ),
                             ),
                             PopupMenuButton<String>(
