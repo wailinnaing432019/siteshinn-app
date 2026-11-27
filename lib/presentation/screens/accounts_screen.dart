@@ -17,6 +17,7 @@ import '../../services/auth_service.dart';
 import '../../services/reminder_service.dart';
 import '../widgets/account_setup_form.dart';
 import '../widgets/app_update_dialog.dart';
+import '../widgets/brand_logo.dart';
 import 'auth_screen.dart';
 import 'join_group_screen.dart';
 import 'personal_ledger_view.dart';
@@ -1217,6 +1218,7 @@ class _AppBrandAndUpdateCardState
     try {
       final info = await AppUpdateService.instance.checkForUpdate(
         isBurmese: strings.isBurmese,
+        throwOnError: true,
       );
       if (!mounted) return;
       if (info != null) {
@@ -1226,6 +1228,13 @@ class _AppBrandAndUpdateCardState
           SnackBar(content: Text(strings.upToDateToast)),
         );
       }
+    } catch (e) {
+      if (!mounted) return;
+      final message = await AppErrorFormatter.formatErrorAsync(e, strings);
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(message)),
+      );
     } finally {
       if (mounted) setState(() => _isChecking = false);
     }
@@ -1243,14 +1252,7 @@ class _AppBrandAndUpdateCardState
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             ListTile(
-              leading: ClipRRect(
-                borderRadius: BorderRadius.circular(10),
-                child: Image.asset(
-                  'assets/icon/app_icon.png',
-                  width: 44,
-                  height: 44,
-                ),
-              ),
+              leading: const BrandLogo(size: 44, borderRadius: 10),
               title: const Text(
                 'SiteShinn • စိုက်ရှင်း',
                 style: TextStyle(fontWeight: FontWeight.bold),

@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 
 class AppTheme {
-  static const Color primarySeed = Color(0xFF0F766E);
+  static const Color primarySeed = Color(0xFF0A54A2);
   static const Color accentGold = Color(0xFFF59E0B);
   static const Color positiveGreen = Color(0xFF16A34A);
   static const Color negativeRed = Color(0xFFDC2626);
@@ -16,12 +16,12 @@ class AppTheme {
       useMaterial3: true,
       colorScheme: colorScheme,
       fontFamily: 'Pyidaungsu',
-      scaffoldBackgroundColor: const Color(0xFFF6F8F7),
+      scaffoldBackgroundColor: const Color(0xFFF5F8FC),
       appBarTheme: AppBarTheme(
         centerTitle: false,
         elevation: 0,
         scrolledUnderElevation: 1,
-        backgroundColor: const Color(0xFFF6F8F7),
+        backgroundColor: const Color(0xFFF5F8FC),
         foregroundColor: colorScheme.onSurface,
       ),
       cardTheme: CardThemeData(
@@ -62,17 +62,17 @@ class AppTheme {
       useMaterial3: true,
       colorScheme: colorScheme,
       fontFamily: 'Pyidaungsu',
-      scaffoldBackgroundColor: const Color(0xFF0E1514),
+      scaffoldBackgroundColor: const Color(0xFF0D1420),
       appBarTheme: AppBarTheme(
         centerTitle: false,
         elevation: 0,
         scrolledUnderElevation: 1,
-        backgroundColor: const Color(0xFF0E1514),
+        backgroundColor: const Color(0xFF0D1420),
         foregroundColor: colorScheme.onSurface,
       ),
       cardTheme: CardThemeData(
         elevation: 0,
-        color: const Color(0xFF172220),
+        color: const Color(0xFF162033),
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(16),
           side: BorderSide(color: colorScheme.outlineVariant.withValues(alpha: 0.35)),
@@ -80,7 +80,7 @@ class AppTheme {
       ),
       inputDecorationTheme: InputDecorationTheme(
         filled: true,
-        fillColor: const Color(0xFF172220),
+        fillColor: const Color(0xFF162033),
         border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(12),
           borderSide: BorderSide(color: colorScheme.outlineVariant),

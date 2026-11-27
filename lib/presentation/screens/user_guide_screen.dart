@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/l10n/app_strings.dart';
 import '../../providers/app_providers.dart';
+import '../widgets/brand_logo.dart';
 
 class UserGuideScreen extends ConsumerWidget {
   const UserGuideScreen({super.key});
@@ -38,14 +39,7 @@ class UserGuideScreen extends ConsumerWidget {
               padding: const EdgeInsets.all(16),
               child: Row(
                 children: [
-                  ClipRRect(
-                    borderRadius: BorderRadius.circular(12),
-                    child: Image.asset(
-                      'assets/icon/app_icon.png',
-                      width: 48,
-                      height: 48,
-                    ),
-                  ),
+                  const BrandLogo(size: 48, borderRadius: 12),
                   const SizedBox(width: 14),
                   Expanded(
                     child: Column(

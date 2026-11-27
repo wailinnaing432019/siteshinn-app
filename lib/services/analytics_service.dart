@@ -45,11 +45,11 @@ class AnalyticsService {
   static Color colorForCategory(ExpenseCategory category) {
     switch (category) {
       case ExpenseCategory.food:
-        return const Color(0xFF0F766E);
+        return const Color(0xFF0A54A2);
       case ExpenseCategory.cooking:
         return const Color(0xFFEA580C);
       case ExpenseCategory.utilities:
-        return const Color(0xFF2563EB);
+        return const Color(0xFF0284C7);
       case ExpenseCategory.household:
         return const Color(0xFF7C3AED);
       case ExpenseCategory.transport:

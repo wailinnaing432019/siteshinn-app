@@ -75,7 +75,7 @@ flutter:
   uses-material-design: true
 
   assets:
-    - assets/icon/app_icon.png
+    - assets/icon/siteshinn-logo.png
     - assets/fonts/Pyidaungsu-Regular.ttf
     - assets/fonts/Pyidaungsu-Bold.ttf
 
@@ -89,6 +89,6 @@ flutter:
 flutter_launcher_icons:
   android: true
   ios: false
-  image_path: "assets/icon/app_icon.png"
-  adaptive_icon_background: "#0F3D3E"
-  adaptive_icon_foreground: "assets/icon/app_icon.png"
+  image_path: "assets/icon/siteshinn_launcher_icon.png"
+  adaptive_icon_background: "#FEF9ED"
+  adaptive_icon_foreground: "assets/icon/siteshinn_launcher_fg.png"

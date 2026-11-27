@@ -595,6 +595,31 @@ void main() {
       AppUpdateService.resolveApkUrl(data, ['x86_64']),
       'https://example.com/fallback.apk',
     );
+    expect(AppUpdateService.normalizeBuildNumber(2004), 4);
+    expect(AppUpdateService.normalizeBuildNumber(1004), 4);
+    expect(AppUpdateService.normalizeBuildNumber(5004), 4);
+    expect(
+      const AppUpdateInfo(
+        currentVersion: '2.1.0',
+        currentBuild: 2004,
+        latestVersion: '2.1.0',
+        latestBuild: 5004,
+        apkUrl: 'https://example.com/app.apk',
+        releaseNotes: '',
+      ).hasUpdate,
+      isFalse,
+    );
+    expect(
+      const AppUpdateInfo(
+        currentVersion: '2.1.0',
+        currentBuild: 1004,
+        latestVersion: '2.2.0',
+        latestBuild: 5005,
+        apkUrl: 'https://example.com/app.apk',
+        releaseNotes: '',
+      ).hasUpdate,
+      isTrue,
+    );
   });
 
   testWidgets('UserGuideScreen renders bilingual sections and switches language',

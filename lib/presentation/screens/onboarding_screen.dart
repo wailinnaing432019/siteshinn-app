@@ -5,6 +5,7 @@ import '../../core/l10n/app_strings.dart';
 import '../../core/utils/error_formatter.dart';
 import '../../providers/app_providers.dart';
 import '../widgets/account_setup_form.dart';
+import '../widgets/brand_logo.dart';
 import 'join_group_screen.dart';
 import 'user_guide_screen.dart';
 
@@ -56,15 +57,8 @@ class OnboardingScreen extends ConsumerWidget {
                 ],
               ),
               const SizedBox(height: 12),
-              Center(
-                child: ClipRRect(
-                  borderRadius: BorderRadius.circular(24),
-                  child: Image.asset(
-                    'assets/icon/app_icon.png',
-                    width: 88,
-                    height: 88,
-                  ),
-                ),
+              const Center(
+                child: BrandLogo(size: 88, borderRadius: 24),
               ),
               const SizedBox(height: 16),
               Text(

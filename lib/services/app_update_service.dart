@@ -27,7 +27,10 @@ class AppUpdateInfo {
     this.forceUpdate = false,
   });
 
-  bool get hasUpdate => latestBuild > currentBuild && apkUrl.trim().isNotEmpty;
+  bool get hasUpdate =>
+      AppUpdateService.normalizeBuildNumber(latestBuild) >
+          AppUpdateService.normalizeBuildNumber(currentBuild) &&
+      apkUrl.trim().isNotEmpty;
 }
 
 class AppUpdateService {
@@ -40,6 +43,13 @@ class AppUpdateService {
   );
 
   bool _startupChecked = false;
+
+  /// Flutter's `--split-per-abi` prefixes `versionCode` with `1000` (armeabi-v7a),
+  /// `2000` (arm64-v8a), or `4000` (x86_64). Normalize so all ABIs compare the
+  /// underlying pubspec build number consistently.
+  static int normalizeBuildNumber(int buildCode) {
+    return buildCode >= 1000 ? buildCode % 1000 : buildCode;
+  }
 
   Future<({String versionName, int versionCode, List<String> abis})>
       getCurrentVersionInfo() async {
@@ -83,6 +93,7 @@ class AppUpdateService {
   Future<AppUpdateInfo?> checkForUpdate({
     required bool isBurmese,
     bool startupOnlyOnce = false,
+    bool throwOnError = false,
   }) async {
     if (startupOnlyOnce) {
       if (_startupChecked) return null;
@@ -92,10 +103,12 @@ class AppUpdateService {
 
     try {
       final local = await getCurrentVersionInfo();
+      final source =
+          startupOnlyOnce ? Source.serverAndCache : Source.server;
       final doc = await FirebaseFirestore.instance
           .collection('app_config')
           .doc('android')
-          .get(const GetOptions(source: Source.serverAndCache))
+          .get(GetOptions(source: source))
           .timeout(const Duration(seconds: 6));
 
       final data = doc.data();
@@ -105,8 +118,14 @@ class AppUpdateService {
       final latestVersion = (data['latest_version'] as String? ?? '').trim();
       final apkUrl = resolveApkUrl(data, local.abis);
 
-      final notesMy = (data['release_notes_my'] as String? ?? '').trim();
-      final notesEn = (data['release_notes_en'] as String? ?? '').trim();
+      String readNote(String primary, String fallback) {
+        final primaryVal = (data[primary] as String? ?? '').trim();
+        if (primaryVal.isNotEmpty) return primaryVal;
+        return (data[fallback] as String? ?? '').trim();
+      }
+
+      final notesMy = readNote('release_notes_my', 'release_note_my');
+      final notesEn = readNote('release_notes_en', 'release_note_en');
       final notes = isBurmese
           ? (notesMy.isNotEmpty ? notesMy : notesEn)
           : (notesEn.isNotEmpty ? notesEn : notesMy);
@@ -124,6 +143,7 @@ class AppUpdateService {
 
       return info.hasUpdate ? info : null;
     } catch (_) {
+      if (throwOnError) rethrow;
       return null;
     }
   }

@@ -6,6 +6,7 @@ import '../../core/l10n/app_strings.dart';
 import '../../core/utils/error_formatter.dart';
 import '../../providers/app_providers.dart';
 import '../../services/auth_service.dart';
+import '../widgets/brand_logo.dart';
 import 'user_guide_screen.dart';
 
 class AuthScreen extends ConsumerStatefulWidget {
@@ -184,15 +185,8 @@ class _AuthScreenState extends ConsumerState<AuthScreen> {
                     ],
                   ),
                 const SizedBox(height: 12),
-                Center(
-                  child: ClipRRect(
-                    borderRadius: BorderRadius.circular(24),
-                    child: Image.asset(
-                      'assets/icon/app_icon.png',
-                      width: 84,
-                      height: 84,
-                    ),
-                  ),
+                const Center(
+                  child: BrandLogo(size: 84, borderRadius: 24),
                 ),
                 const SizedBox(height: 14),
                 Text(

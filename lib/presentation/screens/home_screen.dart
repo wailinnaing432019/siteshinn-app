@@ -5,6 +5,7 @@ import '../../core/l10n/app_strings.dart';
 import '../../core/utils/category_icon.dart';
 import '../../core/utils/formatters.dart';
 import '../../providers/app_providers.dart';
+import '../widgets/brand_logo.dart';
 import 'accounts_screen.dart';
 import 'add_expense_screen.dart';
 import 'history_screen.dart';
@@ -105,14 +106,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
         leading: Padding(
           padding: const EdgeInsets.only(left: 12),
           child: Center(
-            child: ClipRRect(
-              borderRadius: BorderRadius.circular(10),
-              child: Image.asset(
-                'assets/icon/app_icon.png',
-                width: 32,
-                height: 32,
-              ),
-            ),
+            child: BrandLogo(size: 32, borderRadius: 10),
           ),
         ),
         title: safeIndex == 0 && account != null
